@@ -37,7 +37,7 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
 
   return (
     <div className="group">
-      <Link to={`/product/${product.id}`}>
+      <Link to={`/product/${product.slug || product.id}`}>
         <div className="bg-card rounded-3xl overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300">
           {/* Image Container */}
           <div className="relative aspect-square overflow-hidden bg-accent/30">
