@@ -1042,7 +1042,7 @@ const Admin = () => {
 
         {/* Promo Code Dialog */}
         <Dialog open={isPromoDialogOpen} onOpenChange={setIsPromoDialogOpen}>
-          <DialogContent className="max-w-lg rounded-3xl">
+          <DialogContent className="max-w-lg w-[95vw] max-h-[85vh] overflow-y-auto rounded-3xl">
             <DialogHeader>
               <DialogTitle>{editingPromo ? 'Edit Promo Code' : 'Add New Promo Code'}</DialogTitle>
             </DialogHeader>
