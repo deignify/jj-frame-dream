@@ -5,22 +5,27 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Layout from '@/components/Layout';
 import ProductCard from '@/components/ProductCard';
-import { useProduct, useProducts } from '@/hooks/useProducts';
+import { useProductBySlug, useProducts } from '@/hooks/useProducts';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
+import { Helmet } from 'react-helmet-async';
 
 const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const { data: product, isLoading } = useProduct(id || '');
+  const { data: product, isLoading } = useProductBySlug(id || '');
   const { data: allProducts } = useProducts();
   const { data: settings } = useBusinessSettings();
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
 
   const currencySymbol = settings?.currency_symbol || '₹';
+  const businessName = settings?.business_name || 'JJ Frame Studio';
+
+  // Get all product images
+  const allImages = product ? [product.image, ...(product.images || [])].filter(Boolean) : [];
 
   if (isLoading) {
     return (
@@ -61,8 +66,53 @@ const ProductDetail = () => {
     ? Math.round(((product.original_price - product.price) / product.original_price) * 100) 
     : 0;
 
+  // Schema.org Product structured data
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.name,
+    "description": product.description,
+    "image": allImages,
+    "sku": product.id,
+    "brand": {
+      "@type": "Brand",
+      "name": businessName
+    },
+    "offers": {
+      "@type": "Offer",
+      "url": `https://jj-frame-dream.lovable.app/product/${product.slug}`,
+      "priceCurrency": "INR",
+      "price": product.price,
+      "availability": product.in_stock 
+        ? "https://schema.org/InStock" 
+        : "https://schema.org/OutOfStock",
+      "seller": {
+        "@type": "Organization",
+        "name": businessName
+      }
+    },
+    "category": product.category,
+    "material": product.material,
+    "color": product.color
+  };
+
   return (
     <Layout>
+      <Helmet>
+        <title>{product.name} | {businessName}</title>
+        <meta name="description" content={product.description || `Buy ${product.name} - Premium ${product.category} frame from ${businessName}`} />
+        <link rel="canonical" href={`https://jj-frame-dream.lovable.app/product/${product.slug}`} />
+        <meta property="og:title" content={`${product.name} | ${businessName}`} />
+        <meta property="og:description" content={product.description || ''} />
+        <meta property="og:image" content={product.image} />
+        <meta property="og:type" content="product" />
+        <meta property="product:price:amount" content={String(product.price)} />
+        <meta property="product:price:currency" content="INR" />
+        <script type="application/ld+json">
+          {JSON.stringify(productSchema)}
+        </script>
+      </Helmet>
+
       <div className="container mx-auto px-4 py-8">
         {/* Breadcrumb */}
         <Link to="/products" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground mb-8 transition-colors">
@@ -75,29 +125,31 @@ const ProductDetail = () => {
           <div className="space-y-4">
             <div className="aspect-square bg-card rounded-3xl overflow-hidden">
               <img
-                src={product.image}
+                src={allImages[selectedImage] || product.image}
                 alt={product.name}
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
               />
             </div>
-            {/* Thumbnail placeholder */}
-            <div className="flex gap-3">
-              {[0, 1, 2].map((i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedImage(i)}
-                  className={`w-20 h-20 rounded-2xl overflow-hidden border-2 transition-colors ${
-                    selectedImage === i ? 'border-primary' : 'border-transparent'
-                  }`}
-                >
-                  <img
-                    src={product.image}
-                    alt={`${product.name} view ${i + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
-              ))}
-            </div>
+            {/* Thumbnails */}
+            {allImages.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {allImages.map((img, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedImage(i)}
+                    className={`w-20 h-20 flex-shrink-0 rounded-2xl overflow-hidden border-2 transition-colors ${
+                      selectedImage === i ? 'border-primary' : 'border-transparent'
+                    }`}
+                  >
+                    <img
+                      src={img}
+                      alt={`${product.name} view ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Product Info */}
@@ -150,7 +202,7 @@ const ProductDetail = () => {
                   {product.in_stock ? (
                     <>
                       <Check className="h-4 w-4 text-green-600" />
-                      In Stock
+                      In Stock ({product.stock_quantity} left)
                     </>
                   ) : (
                     'Out of Stock'
@@ -176,7 +228,8 @@ const ProductDetail = () => {
                   variant="ghost"
                   size="icon"
                   className="rounded-full"
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => setQuantity(Math.min(product.stock_quantity, quantity + 1))}
+                  disabled={quantity >= product.stock_quantity}
                 >
                   <Plus className="h-4 w-4" />
                 </Button>

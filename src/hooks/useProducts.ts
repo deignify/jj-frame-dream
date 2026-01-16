@@ -5,9 +5,11 @@ import { toast } from 'sonner';
 export interface Product {
   id: string;
   name: string;
+  slug: string;
   price: number;
   original_price: number | null;
   image: string;
+  images: string[];
   category: string;
   material: string;
   size: string;
@@ -21,6 +23,35 @@ export interface Product {
   created_at: string;
   updated_at: string;
 }
+
+export const useProductBySlug = (slug: string) => {
+  return useQuery({
+    queryKey: ['product', 'slug', slug],
+    queryFn: async () => {
+      // First try to find by slug
+      let { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+      
+      // If not found by slug, try by ID (for backwards compatibility)
+      if (!data && !error) {
+        const result = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', slug)
+          .maybeSingle();
+        data = result.data;
+        error = result.error;
+      }
+      
+      if (error) throw error;
+      return data as Product | null;
+    },
+    enabled: !!slug
+  });
+};
 
 export const useProducts = () => {
   return useQuery({
@@ -74,7 +105,7 @@ export const useCreateProduct = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (product: Omit<Product, 'id' | 'created_at' | 'updated_at' | 'slug'>) => {
       const { data, error } = await supabase
         .from('products')
         .insert(product)
