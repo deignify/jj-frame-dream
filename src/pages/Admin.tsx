@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,7 +12,9 @@ import Layout from '@/components/Layout';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, Product } from '@/hooks/useProducts';
 import { useOrders, useUpdateOrderStatus } from '@/hooks/useOrders';
 import { useBusinessSettings, useUpdateBusinessSettings } from '@/hooks/useBusinessSettings';
+import { usePromoCodes, useCreatePromoCode, useUpdatePromoCode, useDeletePromoCode, PromoCode } from '@/hooks/usePromoCodes';
 import { useAuth } from '@/hooks/useAuth';
+import { ImageUpload, MultiImageUpload } from '@/components/ImageUpload';
 import { toast } from 'sonner';
 import {
   Pagination,
@@ -24,6 +26,26 @@ import {
 } from '@/components/ui/pagination';
 
 const ITEMS_PER_PAGE = 10;
+
+// Predefined sizes for photo frames
+const FRAME_SIZES = [
+  '4x6 inches',
+  '5x7 inches',
+  '6x8 inches',
+  '8x10 inches',
+  '8x12 inches',
+  '10x12 inches',
+  '11x14 inches',
+  '12x16 inches',
+  '12x18 inches',
+  '16x20 inches',
+  '18x24 inches',
+  '20x24 inches',
+  '24x30 inches',
+  '24x36 inches',
+  'A4 (8.3x11.7 inches)',
+  'A3 (11.7x16.5 inches)',
+];
 
 interface OrderItem {
   id: string;
@@ -38,16 +60,22 @@ const Admin = () => {
   const { data: products, isLoading: productsLoading } = useProducts();
   const { data: orders, isLoading: ordersLoading } = useOrders();
   const { data: settings, isLoading: settingsLoading } = useBusinessSettings();
+  const { data: promoCodes, isLoading: promoCodesLoading } = usePromoCodes();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const updateOrderStatus = useUpdateOrderStatus();
   const updateSettings = useUpdateBusinessSettings();
+  const createPromoCode = useCreatePromoCode();
+  const updatePromoCode = useUpdatePromoCode();
+  const deletePromoCode = useDeletePromoCode();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [isPromoDialogOpen, setIsPromoDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<typeof orders extends (infer T)[] | undefined ? T : never | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -62,7 +90,7 @@ const Admin = () => {
     original_price: '',
     category: 'wooden',
     material: '',
-    size: '',
+    size: '8x10 inches',
     color: '',
     description: '',
     image: '',
@@ -74,6 +102,17 @@ const Admin = () => {
     stock_quantity: '10'
   });
 
+  const [promoFormData, setPromoFormData] = useState({
+    code: '',
+    discount_type: 'percentage' as 'percentage' | 'fixed',
+    discount_value: '',
+    min_order_amount: '0',
+    max_uses: '',
+    valid_from: new Date().toISOString().split('T')[0],
+    valid_until: '',
+    is_active: true
+  });
+
   const [businessForm, setBusinessForm] = useState({
     business_name: '',
     business_tagline: '',
@@ -81,7 +120,10 @@ const Admin = () => {
     business_phone: '',
     business_address: '',
     currency_symbol: '',
-    tax_rate: ''
+    tax_rate: '',
+    razorpay_key_id: '',
+    razorpay_key_secret: '',
+    razorpay_webhook_secret: ''
   });
 
   useEffect(() => {
@@ -93,7 +135,10 @@ const Admin = () => {
         business_phone: settings.business_phone || '',
         business_address: settings.business_address || '',
         currency_symbol: settings.currency_symbol || '₹',
-        tax_rate: settings.tax_rate || '18'
+        tax_rate: settings.tax_rate || '18',
+        razorpay_key_id: settings.razorpay_key_id || '',
+        razorpay_key_secret: settings.razorpay_key_secret || '',
+        razorpay_webhook_secret: settings.razorpay_webhook_secret || ''
       });
     }
   }, [settings]);
@@ -129,7 +174,7 @@ const Admin = () => {
       original_price: '',
       category: 'wooden',
       material: '',
-      size: '',
+      size: '8x10 inches',
       color: '',
       description: '',
       image: '',
@@ -141,6 +186,20 @@ const Admin = () => {
       stock_quantity: '10'
     });
     setEditingProduct(null);
+  };
+
+  const resetPromoForm = () => {
+    setPromoFormData({
+      code: '',
+      discount_type: 'percentage',
+      discount_value: '',
+      min_order_amount: '0',
+      max_uses: '',
+      valid_from: new Date().toISOString().split('T')[0],
+      valid_until: '',
+      is_active: true
+    });
+    setEditingPromo(null);
   };
 
   const openEditDialog = (product: Product) => {
@@ -168,6 +227,21 @@ const Admin = () => {
   const openOrderDialog = (order: typeof orders extends (infer T)[] | undefined ? T : never) => {
     setSelectedOrder(order);
     setIsOrderDialogOpen(true);
+  };
+
+  const openPromoEditDialog = (promo: PromoCode) => {
+    setEditingPromo(promo);
+    setPromoFormData({
+      code: promo.code,
+      discount_type: promo.discount_type,
+      discount_value: promo.discount_value.toString(),
+      min_order_amount: promo.min_order_amount.toString(),
+      max_uses: promo.max_uses?.toString() || '',
+      valid_from: promo.valid_from.split('T')[0],
+      valid_until: promo.valid_until?.split('T')[0] || '',
+      is_active: promo.is_active
+    });
+    setIsPromoDialogOpen(true);
   };
 
   const handleSubmitProduct = async () => {
@@ -200,9 +274,37 @@ const Admin = () => {
     resetForm();
   };
 
+  const handleSubmitPromo = async () => {
+    const promoData = {
+      code: promoFormData.code,
+      discount_type: promoFormData.discount_type,
+      discount_value: parseFloat(promoFormData.discount_value),
+      min_order_amount: parseFloat(promoFormData.min_order_amount) || 0,
+      max_uses: promoFormData.max_uses ? parseInt(promoFormData.max_uses) : null,
+      valid_from: promoFormData.valid_from,
+      valid_until: promoFormData.valid_until || null,
+      is_active: promoFormData.is_active
+    };
+
+    if (editingPromo) {
+      await updatePromoCode.mutateAsync({ id: editingPromo.id, ...promoData });
+    } else {
+      await createPromoCode.mutateAsync(promoData);
+    }
+
+    setIsPromoDialogOpen(false);
+    resetPromoForm();
+  };
+
   const handleDeleteProduct = async (id: string) => {
     if (confirm('Are you sure you want to delete this product?')) {
       await deleteProduct.mutateAsync(id);
+    }
+  };
+
+  const handleDeletePromo = async (id: string) => {
+    if (confirm('Are you sure you want to delete this promo code?')) {
+      await deletePromoCode.mutateAsync(id);
     }
   };
 
@@ -310,7 +412,7 @@ const Admin = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-muted-foreground">Manage your products, orders and settings</p>
+            <p className="text-muted-foreground">Manage your products, orders, promo codes and settings</p>
           </div>
           <Button onClick={handleLogout} variant="outline" className="rounded-full">
             <LogOut className="h-4 w-4 mr-2" />
@@ -319,7 +421,7 @@ const Admin = () => {
         </div>
 
         <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="bg-card rounded-full p-1">
+          <TabsList className="bg-card rounded-full p-1 flex-wrap h-auto">
             <TabsTrigger value="products" className="rounded-full gap-2">
               <Package className="h-4 w-4" />
               Products
@@ -327,6 +429,10 @@ const Admin = () => {
             <TabsTrigger value="orders" className="rounded-full gap-2">
               <ShoppingCart className="h-4 w-4" />
               Orders
+            </TabsTrigger>
+            <TabsTrigger value="promo-codes" className="rounded-full gap-2">
+              <Tag className="h-4 w-4" />
+              Promo Codes
             </TabsTrigger>
             <TabsTrigger value="settings" className="rounded-full gap-2">
               <Settings className="h-4 w-4" />
@@ -449,14 +555,19 @@ const Admin = () => {
           {/* Orders Tab */}
           <TabsContent value="orders">
             <div className="bg-card rounded-3xl p-6">
-              <h2 className="text-xl font-bold text-foreground mb-6">Orders ({orders?.length || 0})</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-foreground">Orders ({orders?.length || 0})</h2>
+              </div>
 
               {ordersLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : orders?.length === 0 ? (
-                <p className="text-center text-muted-foreground py-8">No orders yet</p>
+                <div className="text-center py-12">
+                  <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No orders yet</p>
+                </div>
               ) : (
                 <>
                   <div className="overflow-x-auto">
@@ -465,34 +576,36 @@ const Admin = () => {
                         <tr className="border-b border-border">
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Order ID</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Customer</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Items</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">View</th>
                         </tr>
                       </thead>
                       <tbody>
                         {paginatedOrders.map(order => (
                           <tr key={order.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
-                            <td className="py-4 px-4 font-medium text-foreground">{order.order_id}</td>
                             <td className="py-4 px-4">
-                              <p className="text-foreground">{order.customer_name}</p>
+                              <p className="font-mono text-sm text-foreground">{order.order_id}</p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="font-medium text-foreground">{order.customer_name}</p>
                               <p className="text-sm text-muted-foreground">{order.customer_email}</p>
                             </td>
-                            <td className="py-4 px-4 text-muted-foreground">
-                              {new Date(order.created_at).toLocaleDateString('en-IN')}
-                            </td>
-                            <td className="py-4 px-4 text-muted-foreground">
-                              {(order.items as unknown as OrderItem[]).length} items
-                            </td>
-                            <td className="py-4 px-4 font-medium text-foreground">₹{order.total.toLocaleString('en-IN')}</td>
                             <td className="py-4 px-4">
-                              <Select 
-                                value={order.status} 
+                              <p className="font-medium text-foreground">₹{order.total.toLocaleString('en-IN')}</p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(order.created_at).toLocaleDateString('en-IN')}
+                              </p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <Select
+                                value={order.status}
                                 onValueChange={(value) => updateOrderStatus.mutate({ id: order.id, status: value })}
                               >
-                                <SelectTrigger className={`w-32 rounded-full text-xs ${getStatusColor(order.status)}`}>
+                                <SelectTrigger className={`w-32 rounded-full text-xs h-8 ${getStatusColor(order.status)}`}>
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -552,84 +665,213 @@ const Admin = () => {
             </div>
           </TabsContent>
 
-          {/* Settings Tab */}
-          <TabsContent value="settings">
+          {/* Promo Codes Tab */}
+          <TabsContent value="promo-codes">
             <div className="bg-card rounded-3xl p-6">
-              <h2 className="text-xl font-bold text-foreground mb-6">Business Settings</h2>
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-foreground">Promo Codes ({promoCodes?.length || 0})</h2>
+                <Button 
+                  className="rounded-full"
+                  onClick={() => { resetPromoForm(); setIsPromoDialogOpen(true); }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Promo Code
+                </Button>
+              </div>
 
-              {settingsLoading ? (
+              {promoCodesLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
+              ) : promoCodes?.length === 0 ? (
+                <div className="text-center py-12">
+                  <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No promo codes yet</p>
+                </div>
               ) : (
-                <div className="space-y-6 max-w-2xl">
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Business Name</Label>
-                      <Input
-                        value={businessForm.business_name}
-                        onChange={(e) => setBusinessForm({ ...businessForm, business_name: e.target.value })}
-                        className="rounded-full"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Currency Symbol</Label>
-                      <Input
-                        value={businessForm.currency_symbol}
-                        onChange={(e) => setBusinessForm({ ...businessForm, currency_symbol: e.target.value })}
-                        className="rounded-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tagline</Label>
-                    <Input
-                      value={businessForm.business_tagline}
-                      onChange={(e) => setBusinessForm({ ...businessForm, business_tagline: e.target.value })}
-                      className="rounded-full"
-                    />
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Email</Label>
-                      <Input
-                        value={businessForm.business_email}
-                        onChange={(e) => setBusinessForm({ ...businessForm, business_email: e.target.value })}
-                        className="rounded-full"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Phone</Label>
-                      <Input
-                        value={businessForm.business_phone}
-                        onChange={(e) => setBusinessForm({ ...businessForm, business_phone: e.target.value })}
-                        className="rounded-full"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Input
-                      value={businessForm.business_address}
-                      onChange={(e) => setBusinessForm({ ...businessForm, business_address: e.target.value })}
-                      className="rounded-full"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Tax Rate (%)</Label>
-                    <Input
-                      type="number"
-                      value={businessForm.tax_rate}
-                      onChange={(e) => setBusinessForm({ ...businessForm, tax_rate: e.target.value })}
-                      className="rounded-full w-32"
-                    />
-                  </div>
-                  <Button onClick={handleSaveSettings} className="rounded-full" disabled={updateSettings.isPending}>
-                    <Save className="h-4 w-4 mr-2" />
-                    {updateSettings.isPending ? 'Saving...' : 'Save Settings'}
-                  </Button>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Code</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Discount</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Min Order</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Usage</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {promoCodes?.map(promo => (
+                        <tr key={promo.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                          <td className="py-4 px-4">
+                            <p className="font-mono font-bold text-foreground">{promo.code}</p>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="font-medium text-foreground">
+                              {promo.discount_type === 'percentage' ? `${promo.discount_value}%` : `₹${promo.discount_value}`}
+                            </p>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="text-muted-foreground">₹{promo.min_order_amount}</p>
+                          </td>
+                          <td className="py-4 px-4">
+                            <p className="text-muted-foreground">
+                              {promo.used_count} / {promo.max_uses || '∞'}
+                            </p>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${promo.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {promo.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openPromoEditDialog(promo)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeletePromo(promo.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
+            </div>
+          </TabsContent>
+
+          {/* Settings Tab */}
+          <TabsContent value="settings">
+            <div className="space-y-6">
+              {/* Business Settings */}
+              <div className="bg-card rounded-3xl p-6">
+                <h2 className="text-xl font-bold text-foreground mb-6">Business Settings</h2>
+
+                {settingsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  </div>
+                ) : (
+                  <div className="space-y-6 max-w-2xl">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Business Name</Label>
+                        <Input
+                          value={businessForm.business_name}
+                          onChange={(e) => setBusinessForm({ ...businessForm, business_name: e.target.value })}
+                          className="rounded-full"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Currency Symbol</Label>
+                        <Input
+                          value={businessForm.currency_symbol}
+                          onChange={(e) => setBusinessForm({ ...businessForm, currency_symbol: e.target.value })}
+                          className="rounded-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tagline</Label>
+                      <Input
+                        value={businessForm.business_tagline}
+                        onChange={(e) => setBusinessForm({ ...businessForm, business_tagline: e.target.value })}
+                        className="rounded-full"
+                      />
+                    </div>
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Email</Label>
+                        <Input
+                          value={businessForm.business_email}
+                          onChange={(e) => setBusinessForm({ ...businessForm, business_email: e.target.value })}
+                          className="rounded-full"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Phone</Label>
+                        <Input
+                          value={businessForm.business_phone}
+                          onChange={(e) => setBusinessForm({ ...businessForm, business_phone: e.target.value })}
+                          className="rounded-full"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Address</Label>
+                      <Input
+                        value={businessForm.business_address}
+                        onChange={(e) => setBusinessForm({ ...businessForm, business_address: e.target.value })}
+                        className="rounded-full"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tax Rate (%)</Label>
+                      <Input
+                        type="number"
+                        value={businessForm.tax_rate}
+                        onChange={(e) => setBusinessForm({ ...businessForm, tax_rate: e.target.value })}
+                        className="rounded-full w-32"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Razorpay Settings */}
+              <div className="bg-card rounded-3xl p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold text-foreground">Razorpay Settings</h2>
+                </div>
+                
+                <div className="space-y-4 max-w-2xl">
+                  <div className="space-y-2">
+                    <Label>Razorpay Key ID</Label>
+                    <Input
+                      value={businessForm.razorpay_key_id}
+                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_key_id: e.target.value })}
+                      className="rounded-full"
+                      placeholder="rzp_test_..."
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Razorpay Key Secret</Label>
+                    <Input
+                      type="password"
+                      value={businessForm.razorpay_key_secret}
+                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_key_secret: e.target.value })}
+                      className="rounded-full"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Razorpay Webhook Secret</Label>
+                    <Input
+                      type="password"
+                      value={businessForm.razorpay_webhook_secret}
+                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_webhook_secret: e.target.value })}
+                      className="rounded-full"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Get your Razorpay API keys from the{' '}
+                    <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      Razorpay Dashboard
+                    </a>
+                  </p>
+                </div>
+              </div>
+
+              <Button onClick={handleSaveSettings} className="rounded-full" disabled={updateSettings.isPending}>
+                <Save className="h-4 w-4 mr-2" />
+                {updateSettings.isPending ? 'Saving...' : 'Save All Settings'}
+              </Button>
             </div>
           </TabsContent>
         </Tabs>
@@ -712,12 +954,16 @@ const Admin = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Size</Label>
-                  <Input
-                    value={formData.size}
-                    onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                    className="rounded-full"
-                    placeholder="8x10 inches"
-                  />
+                  <Select value={formData.size} onValueChange={(value) => setFormData({ ...formData, size: value })}>
+                    <SelectTrigger className="rounded-full">
+                      <SelectValue placeholder="Select size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FRAME_SIZES.map(size => (
+                        <SelectItem key={size} value={size}>{size}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Color</Label>
@@ -729,15 +975,21 @@ const Admin = () => {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Image URL</Label>
-                <Input
-                  value={formData.image}
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  className="rounded-full"
-                  placeholder="/frame-1.jpg"
-                />
-              </div>
+              
+              {/* Image Upload */}
+              <ImageUpload
+                value={formData.image}
+                onChange={(url) => setFormData({ ...formData, image: url })}
+                label="Main Product Image"
+              />
+              
+              {/* Multi Image Upload */}
+              <MultiImageUpload
+                values={formData.images}
+                onChange={(urls) => setFormData({ ...formData, images: urls })}
+                maxImages={5}
+              />
+
               <div className="space-y-2">
                 <Label>Description</Label>
                 <Textarea
@@ -782,6 +1034,114 @@ const Admin = () => {
                   disabled={!formData.name || !formData.price || createProduct.isPending || updateProduct.isPending}
                 >
                   {(createProduct.isPending || updateProduct.isPending) ? 'Saving...' : (editingProduct ? 'Update Product' : 'Add Product')}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Promo Code Dialog */}
+        <Dialog open={isPromoDialogOpen} onOpenChange={setIsPromoDialogOpen}>
+          <DialogContent className="max-w-lg rounded-3xl">
+            <DialogHeader>
+              <DialogTitle>{editingPromo ? 'Edit Promo Code' : 'Add New Promo Code'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label>Promo Code *</Label>
+                <Input
+                  value={promoFormData.code}
+                  onChange={(e) => setPromoFormData({ ...promoFormData, code: e.target.value.toUpperCase() })}
+                  className="rounded-full font-mono"
+                  placeholder="SAVE20"
+                />
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Discount Type</Label>
+                  <Select 
+                    value={promoFormData.discount_type} 
+                    onValueChange={(value: 'percentage' | 'fixed') => setPromoFormData({ ...promoFormData, discount_type: value })}
+                  >
+                    <SelectTrigger className="rounded-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percentage">Percentage (%)</SelectItem>
+                      <SelectItem value="fixed">Fixed Amount (₹)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount Value *</Label>
+                  <Input
+                    type="number"
+                    value={promoFormData.discount_value}
+                    onChange={(e) => setPromoFormData({ ...promoFormData, discount_value: e.target.value })}
+                    className="rounded-full"
+                    placeholder={promoFormData.discount_type === 'percentage' ? '20' : '500'}
+                  />
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Min Order Amount (₹)</Label>
+                  <Input
+                    type="number"
+                    value={promoFormData.min_order_amount}
+                    onChange={(e) => setPromoFormData({ ...promoFormData, min_order_amount: e.target.value })}
+                    className="rounded-full"
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Uses</Label>
+                  <Input
+                    type="number"
+                    value={promoFormData.max_uses}
+                    onChange={(e) => setPromoFormData({ ...promoFormData, max_uses: e.target.value })}
+                    className="rounded-full"
+                    placeholder="Unlimited"
+                  />
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Valid From</Label>
+                  <Input
+                    type="date"
+                    value={promoFormData.valid_from}
+                    onChange={(e) => setPromoFormData({ ...promoFormData, valid_from: e.target.value })}
+                    className="rounded-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valid Until</Label>
+                  <Input
+                    type="date"
+                    value={promoFormData.valid_until}
+                    onChange={(e) => setPromoFormData({ ...promoFormData, valid_until: e.target.value })}
+                    className="rounded-full"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch 
+                  checked={promoFormData.is_active} 
+                  onCheckedChange={(checked) => setPromoFormData({ ...promoFormData, is_active: checked })} 
+                />
+                <Label>Active</Label>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setIsPromoDialogOpen(false)} className="flex-1 rounded-full">
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubmitPromo} 
+                  className="flex-1 rounded-full"
+                  disabled={!promoFormData.code || !promoFormData.discount_value || createPromoCode.isPending || updatePromoCode.isPending}
+                >
+                  {(createPromoCode.isPending || updatePromoCode.isPending) ? 'Saving...' : (editingPromo ? 'Update' : 'Add')}
                 </Button>
               </div>
             </div>
@@ -869,34 +1229,6 @@ const Admin = () => {
                     <span className="text-foreground">Total</span>
                     <span className="text-foreground">₹{selectedOrder.total.toLocaleString('en-IN')}</span>
                   </div>
-                </div>
-
-                {/* Payment Method */}
-                <div className="text-sm text-muted-foreground">
-                  Payment Method: <span className="capitalize font-medium text-foreground">{selectedOrder.payment_method === 'cod' ? 'Cash on Delivery' : selectedOrder.payment_method}</span>
-                </div>
-
-                {/* Update Status */}
-                <div className="flex items-center gap-4 pt-4 border-t border-border">
-                  <Label>Update Status:</Label>
-                  <Select 
-                    value={selectedOrder.status} 
-                    onValueChange={(value) => {
-                      updateOrderStatus.mutate({ id: selectedOrder.id, status: value });
-                      setSelectedOrder({ ...selectedOrder, status: value });
-                    }}
-                  >
-                    <SelectTrigger className="w-40 rounded-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="processing">Processing</SelectItem>
-                      <SelectItem value="shipped">Shipped</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
             )}

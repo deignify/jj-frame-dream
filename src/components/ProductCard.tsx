@@ -63,14 +63,14 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
           </div>
 
           {/* Content */}
-          <div className="p-5">
+          <div className="p-4">
             <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
               {product.category}
             </p>
-            <h3 className="font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
+            <h3 className="font-semibold text-foreground mb-2 group-hover:text-primary transition-colors line-clamp-1">
               {product.name}
             </h3>
-            <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center gap-2">
               <span className="text-lg font-bold text-primary">
                 {currencySymbol}{product.price.toLocaleString('en-IN')}
               </span>
