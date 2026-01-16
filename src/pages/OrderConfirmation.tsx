@@ -2,10 +2,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle, Package, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Layout from '@/components/Layout';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 
 const OrderConfirmation = () => {
   const location = useLocation();
+  const { data: settings } = useBusinessSettings();
   const { orderId, total } = location.state || { orderId: 'JJF-XXXXXXXX', total: 0 };
+  const currencySymbol = settings?.currency_symbol || '₹';
 
   return (
     <Layout>
@@ -37,7 +40,7 @@ const OrderConfirmation = () => {
             <div className="border-t border-border pt-4">
               <div className="flex justify-between mb-2">
                 <span className="text-muted-foreground">Order Total</span>
-                <span className="font-bold text-foreground">${(total * 1.08).toFixed(2)}</span>
+                <span className="font-bold text-foreground">{currencySymbol}{total.toLocaleString('en-IN')}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Estimated Delivery</span>

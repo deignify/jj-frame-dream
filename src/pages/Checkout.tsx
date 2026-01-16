@@ -7,12 +7,20 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Layout from '@/components/Layout';
 import { useCart } from '@/context/CartContext';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
+import { useCreateOrder } from '@/hooks/useOrders';
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, clearCart } = useCart();
+  const { data: settings } = useBusinessSettings();
+  const createOrder = useCreateOrder();
   const [step, setStep] = useState(1);
-  const [paymentMethod, setPaymentMethod] = useState('online');
+  const [paymentMethod, setPaymentMethod] = useState('cod');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const currencySymbol = settings?.currency_symbol || '₹';
+  const taxRate = parseFloat(settings?.tax_rate || '18') / 100;
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -23,20 +31,52 @@ const Checkout = () => {
     city: '',
     state: '',
     zip: '',
-    country: 'United States'
+    country: 'India'
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
+    setIsSubmitting(true);
+    
     // Generate order ID
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const subtotal = totalPrice;
+    const tax = Math.round(subtotal * taxRate);
+    const total = subtotal + tax;
     
-    // Clear cart and navigate to confirmation
-    clearCart();
-    navigate('/order-confirmation', { state: { orderId, total: totalPrice } });
+    try {
+      await createOrder.mutateAsync({
+        order_id: orderId,
+        customer_name: `${formData.firstName} ${formData.lastName}`,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        shipping_address: formData.address,
+        shipping_city: formData.city,
+        shipping_state: formData.state,
+        shipping_zip: formData.zip,
+        items: items.map(item => ({
+          product_id: item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity
+        })),
+        subtotal,
+        tax,
+        total,
+        payment_method: paymentMethod,
+        status: 'pending'
+      });
+
+      clearCart();
+      navigate('/order-confirmation', { state: { orderId, total } });
+    } catch (error) {
+      console.error('Order creation failed:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (items.length === 0) {
@@ -49,6 +89,10 @@ const Checkout = () => {
     { number: 2, title: 'Shipping', icon: MapPin },
     { number: 3, title: 'Payment', icon: CreditCard }
   ];
+
+  const subtotal = totalPrice;
+  const tax = Math.round(subtotal * taxRate);
+  const total = subtotal + tax;
 
   return (
     <Layout>
@@ -94,6 +138,7 @@ const Checkout = () => {
                         onChange={handleInputChange}
                         className="rounded-full"
                         placeholder="John"
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -105,6 +150,7 @@ const Checkout = () => {
                         onChange={handleInputChange}
                         className="rounded-full"
                         placeholder="Doe"
+                        required
                       />
                     </div>
                   </div>
@@ -118,6 +164,7 @@ const Checkout = () => {
                       onChange={handleInputChange}
                       className="rounded-full"
                       placeholder="john@example.com"
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -128,10 +175,15 @@ const Checkout = () => {
                       value={formData.phone}
                       onChange={handleInputChange}
                       className="rounded-full"
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="+91 98765 43210"
+                      required
                     />
                   </div>
-                  <Button onClick={() => setStep(2)} className="w-full rounded-full">
+                  <Button 
+                    onClick={() => setStep(2)} 
+                    className="w-full rounded-full"
+                    disabled={!formData.firstName || !formData.lastName || !formData.email || !formData.phone}
+                  >
                     Continue to Shipping
                     <ChevronRight className="h-4 w-4 ml-2" />
                   </Button>
@@ -151,6 +203,7 @@ const Checkout = () => {
                       onChange={handleInputChange}
                       className="rounded-full"
                       placeholder="123 Frame Street"
+                      required
                     />
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
@@ -162,7 +215,8 @@ const Checkout = () => {
                         value={formData.city}
                         onChange={handleInputChange}
                         className="rounded-full"
-                        placeholder="New York"
+                        placeholder="Mumbai"
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -173,20 +227,22 @@ const Checkout = () => {
                         value={formData.state}
                         onChange={handleInputChange}
                         className="rounded-full"
-                        placeholder="NY"
+                        placeholder="Maharashtra"
+                        required
                       />
                     </div>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="zip">ZIP Code</Label>
+                      <Label htmlFor="zip">PIN Code</Label>
                       <Input
                         id="zip"
                         name="zip"
                         value={formData.zip}
                         onChange={handleInputChange}
                         className="rounded-full"
-                        placeholder="10001"
+                        placeholder="400001"
+                        required
                       />
                     </div>
                     <div className="space-y-2">
@@ -214,7 +270,11 @@ const Checkout = () => {
                     <Button variant="outline" onClick={() => setStep(1)} className="flex-1 rounded-full">
                       Back
                     </Button>
-                    <Button onClick={() => setStep(3)} className="flex-1 rounded-full">
+                    <Button 
+                      onClick={() => setStep(3)} 
+                      className="flex-1 rounded-full"
+                      disabled={!formData.address || !formData.city || !formData.state || !formData.zip}
+                    >
                       Continue to Payment
                       <ChevronRight className="h-4 w-4 ml-2" />
                     </Button>
@@ -229,17 +289,6 @@ const Checkout = () => {
                   
                   <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
                     <label className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-colors ${
-                      paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-border'
-                    }`}>
-                      <RadioGroupItem value="online" />
-                      <CreditCard className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Pay Online</p>
-                        <p className="text-sm text-muted-foreground">Credit/Debit Card or PayPal</p>
-                      </div>
-                    </label>
-
-                    <label className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-colors ${
                       paymentMethod === 'cod' ? 'border-primary bg-primary/5' : 'border-border'
                     }`}>
                       <RadioGroupItem value="cod" />
@@ -247,6 +296,17 @@ const Checkout = () => {
                       <div>
                         <p className="font-medium text-foreground">Cash on Delivery</p>
                         <p className="text-sm text-muted-foreground">Pay when your order arrives</p>
+                      </div>
+                    </label>
+
+                    <label className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-colors ${
+                      paymentMethod === 'online' ? 'border-primary bg-primary/5' : 'border-border'
+                    }`}>
+                      <RadioGroupItem value="online" />
+                      <CreditCard className="h-5 w-5 text-primary" />
+                      <div>
+                        <p className="font-medium text-foreground">Pay Online</p>
+                        <p className="text-sm text-muted-foreground">UPI, Credit/Debit Card, Net Banking</p>
                       </div>
                     </label>
                   </RadioGroup>
@@ -286,8 +346,12 @@ const Checkout = () => {
                     <Button variant="outline" onClick={() => setStep(2)} className="flex-1 rounded-full">
                       Back
                     </Button>
-                    <Button onClick={handlePlaceOrder} className="flex-1 rounded-full">
-                      Place Order
+                    <Button 
+                      onClick={handlePlaceOrder} 
+                      className="flex-1 rounded-full"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'Placing Order...' : 'Place Order'}
                     </Button>
                   </div>
                 </div>
@@ -313,7 +377,7 @@ const Checkout = () => {
                       <p className="text-sm text-muted-foreground">Qty: {quantity}</p>
                     </div>
                     <p className="font-medium text-foreground">
-                      ${(product.price * quantity).toFixed(2)}
+                      {currencySymbol}{(product.price * quantity).toLocaleString('en-IN')}
                     </p>
                   </div>
                 ))}
@@ -322,19 +386,19 @@ const Checkout = () => {
               <div className="border-t border-border pt-4 space-y-2">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>{currencySymbol}{subtotal.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
                   <span className="text-primary font-medium">Free</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Tax</span>
-                  <span>${(totalPrice * 0.08).toFixed(2)}</span>
+                  <span>GST ({Math.round(taxRate * 100)}%)</span>
+                  <span>{currencySymbol}{tax.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-lg font-bold text-foreground pt-2 border-t border-border">
                   <span>Total</span>
-                  <span>${(totalPrice * 1.08).toFixed(2)}</span>
+                  <span>{currencySymbol}{total.toLocaleString('en-IN')}</span>
                 </div>
               </div>
             </div>

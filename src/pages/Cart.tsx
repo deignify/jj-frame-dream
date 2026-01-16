@@ -3,9 +3,12 @@ import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Layout from '@/components/Layout';
 import { useCart } from '@/context/CartContext';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
+  const { data: settings } = useBusinessSettings();
+  const currencySymbol = settings?.currency_symbol || '₹';
 
   if (items.length === 0) {
     return (
@@ -55,6 +58,11 @@ const Cart = () => {
                         </h3>
                       </Link>
                       <p className="text-sm text-muted-foreground">{product.size}</p>
+                      {product.original_price && (
+                        <p className="text-xs text-muted-foreground line-through">
+                          {currencySymbol}{product.original_price.toLocaleString('en-IN')}
+                        </p>
+                      )}
                     </div>
                     <Button
                       variant="ghost"
@@ -88,7 +96,7 @@ const Cart = () => {
                     </div>
 
                     <p className="text-lg font-bold text-primary">
-                      ${(product.price * quantity).toFixed(2)}
+                      {currencySymbol}{(product.price * quantity).toLocaleString('en-IN')}
                     </p>
                   </div>
                 </div>
@@ -104,22 +112,22 @@ const Cart = () => {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal ({totalItems} items)</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>{currencySymbol}{totalPrice.toLocaleString('en-IN')}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
                   <span className="text-primary font-medium">Free</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
-                  <span>Tax</span>
-                  <span>Calculated at checkout</span>
+                  <span>Tax (18% GST)</span>
+                  <span>{currencySymbol}{Math.round(totalPrice * 0.18).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-bold text-foreground">
                   <span>Total</span>
-                  <span>${totalPrice.toFixed(2)}</span>
+                  <span>{currencySymbol}{Math.round(totalPrice * 1.18).toLocaleString('en-IN')}</span>
                 </div>
               </div>
 

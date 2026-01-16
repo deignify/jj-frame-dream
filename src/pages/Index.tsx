@@ -3,12 +3,16 @@ import { Button } from '@/components/ui/button';
 import ProductCard from '@/components/ProductCard';
 import FeatureCard from '@/components/FeatureCard';
 import Layout from '@/components/Layout';
-import { products } from '@/data/products';
-import { Paintbrush, Shield, Ruler, Package, Heart } from 'lucide-react';
+import { useFeaturedProducts } from '@/hooks/useProducts';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
+import { Paintbrush, Shield, Ruler, Package, Heart, Loader2 } from 'lucide-react';
 import heroImage from '@/assets/hero-frames.jpg';
 
 const Index = () => {
-  const featuredProducts = products.filter(p => p.featured).slice(0, 6);
+  const { data: featuredProducts, isLoading } = useFeaturedProducts();
+  const { data: settings } = useBusinessSettings();
+
+  const businessTagline = settings?.business_tagline || 'Preserve Your Memories in Perfect Frames';
 
   const features = [
     {
@@ -57,8 +61,8 @@ const Index = () => {
               Handcrafted with Love
             </span>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6">
-              Preserve Your Memories in{' '}
-              <span className="text-primary">Perfect Frames</span>
+              {businessTagline.split(' ').slice(0, -2).join(' ')}{' '}
+              <span className="text-primary">{businessTagline.split(' ').slice(-2).join(' ')}</span>
             </h1>
             <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
               Discover our collection of handcrafted premium photo frames designed to showcase 
@@ -93,11 +97,17 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-            {featuredProducts.map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
+          {isLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+              {featuredProducts?.map(product => (
+                <ProductCard key={product.id} product={product} showActions />
+              ))}
+            </div>
+          )}
 
           <div className="text-center mt-12">
             <Link to="/products">

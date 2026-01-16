@@ -1,44 +1,44 @@
 import { useState, useMemo } from 'react';
-import { Search, SlidersHorizontal, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Layout from '@/components/Layout';
 import ProductCard from '@/components/ProductCard';
-import { products, categories, sizes, materials } from '@/data/products';
+import { useProducts } from '@/hooks/useProducts';
+
+const categories = [
+  { id: "all", name: "All Frames" },
+  { id: "wooden", name: "Wooden Frames" },
+  { id: "metal", name: "Metal Frames" },
+  { id: "ornate", name: "Ornate Frames" },
+  { id: "modern", name: "Modern Frames" },
+  { id: "collage", name: "Collage Frames" }
+];
 
 const Products = () => {
+  const { data: products, isLoading } = useProducts();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
-  const [size, setSize] = useState('all');
-  const [material, setMaterial] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
   const [showFilters, setShowFilters] = useState(false);
 
   const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    
     let result = [...products];
 
     // Search filter
     if (search) {
       result = result.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.description.toLowerCase().includes(search.toLowerCase())
+        (p.description?.toLowerCase().includes(search.toLowerCase()))
       );
     }
 
     // Category filter
     if (category !== 'all') {
       result = result.filter(p => p.category === category);
-    }
-
-    // Size filter
-    if (size !== 'all') {
-      result = result.filter(p => p.size === size);
-    }
-
-    // Material filter
-    if (material !== 'all') {
-      result = result.filter(p => p.material === material);
     }
 
     // Sorting
@@ -58,17 +58,15 @@ const Products = () => {
     }
 
     return result;
-  }, [search, category, size, material, sortBy]);
+  }, [products, search, category, sortBy]);
 
   const clearFilters = () => {
     setSearch('');
     setCategory('all');
-    setSize('all');
-    setMaterial('all');
     setSortBy('featured');
   };
 
-  const hasActiveFilters = search || category !== 'all' || size !== 'all' || material !== 'all';
+  const hasActiveFilters = search || category !== 'all';
 
   return (
     <Layout>
@@ -123,18 +121,6 @@ const Products = () => {
                 </SelectContent>
               </Select>
 
-              <Select value={size} onValueChange={setSize}>
-                <SelectTrigger className="w-40 rounded-full">
-                  <SelectValue placeholder="Size" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sizes</SelectItem>
-                  {sizes.map(s => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-44 rounded-full">
                   <SelectValue placeholder="Sort by" />
@@ -171,32 +157,8 @@ const Products = () => {
                   </SelectContent>
                 </Select>
 
-                <Select value={size} onValueChange={setSize}>
-                  <SelectTrigger className="rounded-full">
-                    <SelectValue placeholder="Size" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sizes</SelectItem>
-                    {sizes.map(s => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Select value={material} onValueChange={setMaterial}>
-                  <SelectTrigger className="rounded-full col-span-2">
-                    <SelectValue placeholder="Material" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Materials</SelectItem>
-                    {materials.map(m => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="rounded-full col-span-2">
+                  <SelectTrigger className="rounded-full">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -223,10 +185,14 @@ const Products = () => {
           </p>
 
           {/* Product Grid */}
-          {filteredProducts.length > 0 ? (
+          {isLoading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredProducts.map(product => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} showActions />
               ))}
             </div>
           ) : (

@@ -1,7 +1,15 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from 'lucide-react';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 
 const Footer = () => {
+  const { data: settings } = useBusinessSettings();
+
+  const businessName = settings?.business_name || 'JJ Frame Studio';
+  const businessEmail = settings?.business_email || 'hello@jjframestudio.com';
+  const businessPhone = settings?.business_phone || '+91 98765 43210';
+  const businessAddress = settings?.business_address || '123 Frame Street, Art District, Mumbai 400001';
+
   return (
     <footer className="bg-card border-t border-border">
       <div className="container mx-auto px-4 py-12">
@@ -12,7 +20,7 @@ const Footer = () => {
               <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center">
                 <span className="text-primary-foreground font-bold text-lg">JJ</span>
               </div>
-              <span className="font-semibold text-lg text-foreground">Frame Studio</span>
+              <span className="font-semibold text-lg text-foreground">{businessName.replace('JJ ', '')}</span>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
               Crafting beautiful frames to preserve your most precious memories since 2010.
@@ -36,7 +44,7 @@ const Footer = () => {
             <ul className="space-y-2">
               {['Home', 'Shop', 'About Us', 'Contact'].map(link => (
                 <li key={link}>
-                  <Link to={link === 'Home' ? '/' : `/${link.toLowerCase().replace(' ', '-')}`} className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  <Link to={link === 'Home' ? '/' : link === 'Shop' ? '/products' : `/${link.toLowerCase().replace(' ', '-')}`} className="text-muted-foreground text-sm hover:text-primary transition-colors">
                     {link}
                   </Link>
                 </li>
@@ -63,16 +71,16 @@ const Footer = () => {
             <h4 className="font-semibold text-foreground mb-4">Contact Us</h4>
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
-                <Mail className="h-4 w-4 text-primary" />
-                hello@jjframestudio.com
+                <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+                {businessEmail}
               </li>
               <li className="flex items-center gap-3 text-muted-foreground text-sm">
-                <Phone className="h-4 w-4 text-primary" />
-                +1 (555) 123-4567
+                <Phone className="h-4 w-4 text-primary flex-shrink-0" />
+                {businessPhone}
               </li>
               <li className="flex items-start gap-3 text-muted-foreground text-sm">
-                <MapPin className="h-4 w-4 text-primary mt-0.5" />
-                123 Frame Street, Art District, NY 10001
+                <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                {businessAddress}
               </li>
             </ul>
           </div>
@@ -80,7 +88,7 @@ const Footer = () => {
 
         <div className="mt-12 pt-8 border-t border-border text-center">
           <p className="text-muted-foreground text-sm">
-            © {new Date().getFullYear()} JJ Frame Studio. All rights reserved.
+            © {new Date().getFullYear()} {businessName}. All rights reserved.
           </p>
         </div>
       </div>
