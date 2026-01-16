@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Heart, ChevronLeft, Check } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, Heart, ChevronLeft, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Layout from '@/components/Layout';
 import ProductCard from '@/components/ProductCard';
-import { products } from '@/data/products';
+import { useProduct, useProducts } from '@/hooks/useProducts';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
 
@@ -13,10 +14,23 @@ const ProductDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
+  const { data: product, isLoading } = useProduct(id || '');
+  const { data: allProducts } = useProducts();
+  const { data: settings } = useBusinessSettings();
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
 
-  const product = products.find(p => p.id === id);
+  const currencySymbol = settings?.currency_symbol || '₹';
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-16 flex justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!product) {
     return (
@@ -31,7 +45,7 @@ const ProductDetail = () => {
     );
   }
 
-  const relatedProducts = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
+  const relatedProducts = allProducts?.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4) || [];
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
@@ -42,6 +56,10 @@ const ProductDetail = () => {
     addToCart(product, quantity);
     navigate('/checkout');
   };
+
+  const discount = product.original_price 
+    ? Math.round(((product.original_price - product.price) / product.original_price) * 100) 
+    : 0;
 
   return (
     <Layout>
@@ -62,7 +80,7 @@ const ProductDetail = () => {
                 className="w-full h-full object-cover hover:scale-105 transition-transform duration-500"
               />
             </div>
-            {/* Thumbnail placeholder - in a real app, you'd have multiple images */}
+            {/* Thumbnail placeholder */}
             <div className="flex gap-3">
               {[0, 1, 2].map((i) => (
                 <button
@@ -91,17 +109,17 @@ const ProductDetail = () => {
               <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
                 {product.name}
               </h1>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-3xl font-bold text-primary">
-                  ${product.price.toFixed(2)}
+                  {currencySymbol}{product.price.toLocaleString('en-IN')}
                 </span>
-                {product.originalPrice && (
+                {product.original_price && (
                   <>
                     <span className="text-xl text-muted-foreground line-through">
-                      ${product.originalPrice.toFixed(2)}
+                      {currencySymbol}{product.original_price.toLocaleString('en-IN')}
                     </span>
                     <span className="bg-primary/10 text-primary text-sm font-medium px-3 py-1 rounded-full">
-                      Save ${(product.originalPrice - product.price).toFixed(2)}
+                      {discount}% OFF - Save {currencySymbol}{(product.original_price - product.price).toLocaleString('en-IN')}
                     </span>
                   </>
                 )}
@@ -129,7 +147,7 @@ const ProductDetail = () => {
               <div>
                 <p className="text-sm text-muted-foreground">Availability</p>
                 <p className="font-medium text-foreground flex items-center gap-1">
-                  {product.inStock ? (
+                  {product.in_stock ? (
                     <>
                       <Check className="h-4 w-4 text-green-600" />
                       In Stock
@@ -171,7 +189,7 @@ const ProductDetail = () => {
                 size="lg"
                 className="flex-1 rounded-full"
                 onClick={handleAddToCart}
-                disabled={!product.inStock}
+                disabled={!product.in_stock}
               >
                 <ShoppingCart className="h-5 w-5 mr-2" />
                 Add to Cart
@@ -181,7 +199,7 @@ const ProductDetail = () => {
                 variant="outline"
                 className="flex-1 rounded-full"
                 onClick={handleBuyNow}
-                disabled={!product.inStock}
+                disabled={!product.in_stock}
               >
                 Buy Now
               </Button>
@@ -204,7 +222,7 @@ const ProductDetail = () => {
               </TabsContent>
               <TabsContent value="features" className="pt-6">
                 <ul className="space-y-2">
-                  {product.features.map((feature, index) => (
+                  {product.features?.map((feature, index) => (
                     <li key={index} className="flex items-start gap-2 text-muted-foreground">
                       <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
                       {feature}
@@ -214,7 +232,7 @@ const ProductDetail = () => {
               </TabsContent>
               <TabsContent value="care" className="pt-6">
                 <ul className="space-y-2">
-                  {product.careInstructions.map((instruction, index) => (
+                  {product.care_instructions?.map((instruction, index) => (
                     <li key={index} className="flex items-start gap-2 text-muted-foreground">
                       <span className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
                       {instruction}
@@ -232,7 +250,7 @@ const ProductDetail = () => {
             <h2 className="text-2xl font-bold text-foreground mb-8">You May Also Like</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {relatedProducts.map(p => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard key={p.id} product={p} showActions />
               ))}
             </div>
           </section>

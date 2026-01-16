@@ -2,12 +2,16 @@ import { Link, useLocation } from 'react-router-dom';
 import { ShoppingCart, Menu, X, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
+import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useState } from 'react';
 
 const Header = () => {
   const { totalItems } = useCart();
+  const { data: settings } = useBusinessSettings();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+
+  const businessName = settings?.business_name || 'JJ Frame Studio';
 
   const navLinks = [
     { href: '/', label: 'Home' },
@@ -27,7 +31,9 @@ const Header = () => {
             <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold text-lg">JJ</span>
             </div>
-            <span className="font-semibold text-lg text-foreground hidden sm:block">Frame Studio</span>
+            <span className="font-semibold text-lg text-foreground hidden sm:block">
+              {businessName.replace('JJ ', '')}
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
