@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,24 @@ import { useOrders, useUpdateOrderStatus } from '@/hooks/useOrders';
 import { useBusinessSettings, useUpdateBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+
+const ITEMS_PER_PAGE = 10;
+
+interface OrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  price: number;
+  image?: string;
+}
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading, signIn, signOut } = useAuth();
@@ -27,10 +45,16 @@ const Admin = () => {
   const updateSettings = useUpdateBusinessSettings();
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<typeof orders extends (infer T)[] | undefined ? T : never | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  
+  // Pagination states
+  const [productPage, setProductPage] = useState(1);
+  const [orderPage, setOrderPage] = useState(1);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -45,7 +69,8 @@ const Admin = () => {
     features: '',
     care_instructions: '',
     in_stock: true,
-    featured: false
+    featured: false,
+    stock_quantity: '10'
   });
 
   const [businessForm, setBusinessForm] = useState({
@@ -71,6 +96,13 @@ const Admin = () => {
       });
     }
   }, [settings]);
+
+  // Pagination calculations
+  const paginatedProducts = products?.slice((productPage - 1) * ITEMS_PER_PAGE, productPage * ITEMS_PER_PAGE) || [];
+  const totalProductPages = Math.ceil((products?.length || 0) / ITEMS_PER_PAGE);
+  
+  const paginatedOrders = orders?.slice((orderPage - 1) * ITEMS_PER_PAGE, orderPage * ITEMS_PER_PAGE) || [];
+  const totalOrderPages = Math.ceil((orders?.length || 0) / ITEMS_PER_PAGE);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +135,8 @@ const Admin = () => {
       features: '',
       care_instructions: '',
       in_stock: true,
-      featured: false
+      featured: false,
+      stock_quantity: '10'
     });
     setEditingProduct(null);
   };
@@ -123,12 +156,19 @@ const Admin = () => {
       features: product.features?.join('\n') || '',
       care_instructions: product.care_instructions?.join('\n') || '',
       in_stock: product.in_stock,
-      featured: product.featured
+      featured: product.featured,
+      stock_quantity: product.stock_quantity?.toString() || '0'
     });
     setIsDialogOpen(true);
   };
 
+  const openOrderDialog = (order: typeof orders extends (infer T)[] | undefined ? T : never) => {
+    setSelectedOrder(order);
+    setIsOrderDialogOpen(true);
+  };
+
   const handleSubmitProduct = async () => {
+    const stockQty = parseInt(formData.stock_quantity) || 0;
     const productData = {
       name: formData.name,
       price: parseFloat(formData.price),
@@ -141,8 +181,9 @@ const Admin = () => {
       description: formData.description,
       features: formData.features.split('\n').filter(f => f.trim()),
       care_instructions: formData.care_instructions.split('\n').filter(c => c.trim()),
-      in_stock: formData.in_stock,
-      featured: formData.featured
+      in_stock: stockQty > 0,
+      featured: formData.featured,
+      stock_quantity: stockQty
     };
 
     if (editingProduct) {
@@ -173,6 +214,12 @@ const Admin = () => {
       case 'cancelled': return 'bg-red-100 text-red-700';
       default: return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  const getStockColor = (quantity: number) => {
+    if (quantity <= 0) return 'bg-red-100 text-red-700';
+    if (quantity <= 5) return 'bg-yellow-100 text-yellow-700';
+    return 'bg-green-100 text-green-700';
   };
 
   if (authLoading) {
@@ -302,60 +349,95 @@ const Admin = () => {
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Product</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Category</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Price</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Stock</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products?.map(product => (
-                        <tr key={product.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-3">
-                              <img src={product.image} alt={product.name} className="w-12 h-12 object-cover rounded-xl" />
-                              <div>
-                                <p className="font-medium text-foreground">{product.name}</p>
-                                <p className="text-sm text-muted-foreground">{product.size}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-4 px-4">
-                            <span className="bg-accent text-accent-foreground text-xs font-medium px-2 py-1 rounded-full capitalize">
-                              {product.category}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4">
-                            <p className="font-medium text-foreground">₹{product.price.toLocaleString('en-IN')}</p>
-                            {product.original_price && (
-                              <p className="text-sm text-muted-foreground line-through">₹{product.original_price.toLocaleString('en-IN')}</p>
-                            )}
-                          </td>
-                          <td className="py-4 px-4">
-                            <span className={`text-xs font-medium px-2 py-1 rounded-full ${product.in_stock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                              {product.in_stock ? 'In Stock' : 'Out of Stock'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openEditDialog(product)}>
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteProduct(product.id)}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Product</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Category</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Price</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Stock</th>
+                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {paginatedProducts.map(product => (
+                          <tr key={product.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <img src={product.image} alt={product.name} className="w-12 h-12 object-cover rounded-xl" />
+                                <div>
+                                  <p className="font-medium text-foreground">{product.name}</p>
+                                  <p className="text-sm text-muted-foreground">{product.size}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="bg-accent text-accent-foreground text-xs font-medium px-2 py-1 rounded-full capitalize">
+                                {product.category}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="font-medium text-foreground">₹{product.price.toLocaleString('en-IN')}</p>
+                              {product.original_price && (
+                                <p className="text-sm text-muted-foreground line-through">₹{product.original_price.toLocaleString('en-IN')}</p>
+                              )}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={`text-xs font-medium px-2 py-1 rounded-full ${getStockColor(product.stock_quantity)}`}>
+                                {product.stock_quantity} in stock
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center justify-end gap-2">
+                                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openEditDialog(product)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 text-destructive hover:text-destructive" onClick={() => handleDeleteProduct(product.id)}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Product Pagination */}
+                  {totalProductPages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              onClick={() => productPage > 1 && setProductPage(productPage - 1)}
+                              className={productPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: totalProductPages }, (_, i) => i + 1).map(page => (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => setProductPage(page)}
+                                isActive={productPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext 
+                              onClick={() => productPage < totalProductPages && setProductPage(productPage + 1)}
+                              className={productPage === totalProductPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </TabsContent>
@@ -372,57 +454,96 @@ const Admin = () => {
               ) : orders?.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">No orders yet</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Order ID</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Customer</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                        <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders?.map(order => (
-                        <tr key={order.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
-                          <td className="py-4 px-4 font-medium text-foreground">{order.order_id}</td>
-                          <td className="py-4 px-4">
-                            <p className="text-foreground">{order.customer_name}</p>
-                            <p className="text-sm text-muted-foreground">{order.customer_email}</p>
-                          </td>
-                          <td className="py-4 px-4 text-muted-foreground">
-                            {new Date(order.created_at).toLocaleDateString('en-IN')}
-                          </td>
-                          <td className="py-4 px-4 font-medium text-foreground">₹{order.total.toLocaleString('en-IN')}</td>
-                          <td className="py-4 px-4">
-                            <Select 
-                              value={order.status} 
-                              onValueChange={(value) => updateOrderStatus.mutate({ id: order.id, status: value })}
-                            >
-                              <SelectTrigger className={`w-32 rounded-full text-xs ${getStatusColor(order.status)}`}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="processing">Processing</SelectItem>
-                                <SelectItem value="shipped">Shipped</SelectItem>
-                                <SelectItem value="delivered">Delivered</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="py-4 px-4">
-                            <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Order ID</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Customer</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Items</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {paginatedOrders.map(order => (
+                          <tr key={order.id} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                            <td className="py-4 px-4 font-medium text-foreground">{order.order_id}</td>
+                            <td className="py-4 px-4">
+                              <p className="text-foreground">{order.customer_name}</p>
+                              <p className="text-sm text-muted-foreground">{order.customer_email}</p>
+                            </td>
+                            <td className="py-4 px-4 text-muted-foreground">
+                              {new Date(order.created_at).toLocaleDateString('en-IN')}
+                            </td>
+                            <td className="py-4 px-4 text-muted-foreground">
+                              {(order.items as unknown as OrderItem[]).length} items
+                            </td>
+                            <td className="py-4 px-4 font-medium text-foreground">₹{order.total.toLocaleString('en-IN')}</td>
+                            <td className="py-4 px-4">
+                              <Select 
+                                value={order.status} 
+                                onValueChange={(value) => updateOrderStatus.mutate({ id: order.id, status: value })}
+                              >
+                                <SelectTrigger className={`w-32 rounded-full text-xs ${getStatusColor(order.status)}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pending">Pending</SelectItem>
+                                  <SelectItem value="processing">Processing</SelectItem>
+                                  <SelectItem value="shipped">Shipped</SelectItem>
+                                  <SelectItem value="delivered">Delivered</SelectItem>
+                                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="py-4 px-4">
+                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openOrderDialog(order)}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* Order Pagination */}
+                  {totalOrderPages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious 
+                              onClick={() => orderPage > 1 && setOrderPage(orderPage - 1)}
+                              className={orderPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                          {Array.from({ length: totalOrderPages }, (_, i) => i + 1).map(page => (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                onClick={() => setOrderPage(page)}
+                                isActive={orderPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          ))}
+                          <PaginationItem>
+                            <PaginationNext 
+                              onClick={() => orderPage < totalOrderPages && setOrderPage(orderPage + 1)}
+                              className={orderPage === totalOrderPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </TabsContent>
@@ -542,7 +663,7 @@ const Admin = () => {
                   </Select>
                 </div>
               </div>
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Price (₹) *</Label>
                   <Input
@@ -561,6 +682,17 @@ const Admin = () => {
                     onChange={(e) => setFormData({ ...formData, original_price: e.target.value })}
                     className="rounded-full"
                     placeholder="2999"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Stock Quantity *</Label>
+                  <Input
+                    type="number"
+                    value={formData.stock_quantity}
+                    onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                    className="rounded-full"
+                    placeholder="10"
+                    min="0"
                   />
                 </div>
               </div>
@@ -632,15 +764,9 @@ const Admin = () => {
                   rows={3}
                 />
               </div>
-              <div className="flex gap-6">
-                <div className="flex items-center gap-2">
-                  <Switch checked={formData.in_stock} onCheckedChange={(checked) => setFormData({ ...formData, in_stock: checked })} />
-                  <Label>In Stock</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch checked={formData.featured} onCheckedChange={(checked) => setFormData({ ...formData, featured: checked })} />
-                  <Label>Featured</Label>
-                </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={formData.featured} onCheckedChange={(checked) => setFormData({ ...formData, featured: checked })} />
+                <Label>Featured Product</Label>
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1 rounded-full">
@@ -655,6 +781,121 @@ const Admin = () => {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Order Detail Dialog */}
+        <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl">
+            <DialogHeader>
+              <DialogTitle>Order Details - {selectedOrder?.order_id}</DialogTitle>
+            </DialogHeader>
+            {selectedOrder && (
+              <div className="space-y-6 pt-4">
+                {/* Order Status */}
+                <div className="flex items-center justify-between">
+                  <span className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize ${getStatusColor(selectedOrder.status)}`}>
+                    {selectedOrder.status}
+                  </span>
+                  <span className="text-muted-foreground text-sm">
+                    {new Date(selectedOrder.created_at).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                {/* Customer Info */}
+                <div className="bg-accent/50 rounded-2xl p-4">
+                  <h3 className="font-semibold text-foreground mb-3">Customer Information</h3>
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-primary" />
+                      <span className="text-muted-foreground">{selectedOrder.customer_email}</span>
+                    </div>
+                    {selectedOrder.customer_phone && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <Phone className="h-4 w-4 text-primary" />
+                        <span className="text-muted-foreground">{selectedOrder.customer_phone}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Shipping Address */}
+                <div className="bg-accent/50 rounded-2xl p-4">
+                  <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    Shipping Address
+                  </h3>
+                  <div className="text-muted-foreground">
+                    <p className="font-medium text-foreground">{selectedOrder.customer_name}</p>
+                    <p>{selectedOrder.shipping_address}</p>
+                    <p>{selectedOrder.shipping_city}, {selectedOrder.shipping_state} {selectedOrder.shipping_zip}</p>
+                  </div>
+                </div>
+
+                {/* Order Items */}
+                <div>
+                  <h3 className="font-semibold text-foreground mb-3">Order Items</h3>
+                  <div className="space-y-3">
+                    {(selectedOrder.items as unknown as OrderItem[]).map((item, index) => (
+                      <div key={index} className="flex items-center gap-4 bg-accent/30 rounded-xl p-3">
+                        {item.image && (
+                          <img src={item.image} alt={item.name} className="w-16 h-16 object-cover rounded-lg" />
+                        )}
+                        <div className="flex-1">
+                          <p className="font-medium text-foreground">{item.name}</p>
+                          <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
+                        </div>
+                        <p className="font-medium text-foreground">₹{(item.price * item.quantity).toLocaleString('en-IN')}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Order Summary */}
+                <div className="border-t border-border pt-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-foreground">₹{selectedOrder.subtotal.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax</span>
+                    <span className="text-foreground">₹{selectedOrder.tax.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-border">
+                    <span className="text-foreground">Total</span>
+                    <span className="text-foreground">₹{selectedOrder.total.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+
+                {/* Payment Method */}
+                <div className="text-sm text-muted-foreground">
+                  Payment Method: <span className="capitalize font-medium text-foreground">{selectedOrder.payment_method === 'cod' ? 'Cash on Delivery' : selectedOrder.payment_method}</span>
+                </div>
+
+                {/* Update Status */}
+                <div className="flex items-center gap-4 pt-4 border-t border-border">
+                  <Label>Update Status:</Label>
+                  <Select 
+                    value={selectedOrder.status} 
+                    onValueChange={(value) => {
+                      updateOrderStatus.mutate({ id: selectedOrder.id, status: value });
+                      setSelectedOrder({ ...selectedOrder, status: value });
+                    }}
+                  >
+                    <SelectTrigger className="w-40 rounded-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

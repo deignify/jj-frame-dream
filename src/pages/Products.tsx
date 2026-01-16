@@ -6,6 +6,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Layout from '@/components/Layout';
 import ProductCard from '@/components/ProductCard';
 import { useProducts } from '@/hooks/useProducts';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 
 const categories = [
   { id: "all", name: "All Frames" },
@@ -16,12 +24,15 @@ const categories = [
   { id: "collage", name: "Collage Frames" }
 ];
 
+const ITEMS_PER_PAGE = 12;
+
 const Products = () => {
   const { data: products, isLoading } = useProducts();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('all');
   const [sortBy, setSortBy] = useState('featured');
   const [showFilters, setShowFilters] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -60,13 +71,30 @@ const Products = () => {
     return result;
   }, [products, search, category, sortBy]);
 
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [search, category, sortBy]);
+
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = filteredProducts.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const clearFilters = () => {
     setSearch('');
     setCategory('all');
     setSortBy('featured');
+    setCurrentPage(1);
   };
 
   const hasActiveFilters = search || category !== 'all';
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <Layout>
@@ -181,7 +209,7 @@ const Products = () => {
 
           {/* Results Count */}
           <p className="text-muted-foreground text-sm mb-6">
-            Showing {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
+            Showing {paginatedProducts.length} of {filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
           </p>
 
           {/* Product Grid */}
@@ -189,12 +217,47 @@ const Products = () => {
             <div className="flex justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredProducts.map(product => (
-                <ProductCard key={product.id} product={product} showActions />
-              ))}
-            </div>
+          ) : paginatedProducts.length > 0 ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {paginatedProducts.map(product => (
+                  <ProductCard key={product.id} product={product} showActions />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="mt-12">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious 
+                          onClick={() => currentPage > 1 && handlePageChange(currentPage - 1)}
+                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            onClick={() => handlePageChange(page)}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext 
+                          onClick={() => currentPage < totalPages && handlePageChange(currentPage + 1)}
+                          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-16">
               <p className="text-muted-foreground mb-4">No products found matching your criteria.</p>

@@ -56,13 +56,26 @@ const Footer = () => {
           <div>
             <h4 className="font-semibold text-foreground mb-4">Customer Service</h4>
             <ul className="space-y-2">
-              {['FAQ', 'Shipping Info', 'Returns', 'Track Order'].map(link => (
-                <li key={link}>
-                  <a href="#" className="text-muted-foreground text-sm hover:text-primary transition-colors">
-                    {link}
-                  </a>
-                </li>
-              ))}
+              <li>
+                <Link to="/faq" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  FAQ
+                </Link>
+              </li>
+              <li>
+                <Link to="/shipping-info" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Shipping Info
+                </Link>
+              </li>
+              <li>
+                <Link to="/returns" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Returns
+                </Link>
+              </li>
+              <li>
+                <Link to="/track-order" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Track Order
+                </Link>
+              </li>
             </ul>
           </div>
 

@@ -17,6 +17,7 @@ export interface Product {
   care_instructions: string[];
   in_stock: boolean;
   featured: boolean;
+  stock_quantity: number;
   created_at: string;
   updated_at: string;
 }
