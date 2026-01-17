@@ -45,7 +45,15 @@ const Checkout = () => {
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const currencySymbol = settings?.currency_symbol || '₹';
-  const taxRate = parseFloat(settings?.tax_rate || '18') / 100;
+  const taxRate = parseFloat(settings?.tax_rate || '0') / 100;
+  const deliveryCharge = parseFloat(settings?.delivery_charge || '0');
+  const deliveryType = settings?.delivery_type || 'free';
+  const freeDeliveryThreshold = parseFloat(settings?.free_delivery_threshold || '0');
+  
+  // Calculate if delivery is free based on settings
+  const isDeliveryFree = deliveryType === 'free' || 
+    (deliveryType === 'threshold' && totalPrice >= freeDeliveryThreshold);
+  const actualDeliveryCharge = isDeliveryFree ? 0 : deliveryCharge;
 
   // Load Razorpay script
   useEffect(() => {
@@ -127,7 +135,7 @@ const Checkout = () => {
     const discount = appliedPromo?.discountAmount || 0;
     const discountedSubtotal = subtotal - discount;
     const tax = Math.round(discountedSubtotal * taxRate);
-    const total = discountedSubtotal + tax;
+    const total = discountedSubtotal + tax + actualDeliveryCharge;
     
     try {
       await createOrder.mutateAsync({
@@ -180,7 +188,7 @@ const Checkout = () => {
     const discount = appliedPromo?.discountAmount || 0;
     const discountedSubtotal = subtotal - discount;
     const tax = Math.round(discountedSubtotal * taxRate);
-    const total = discountedSubtotal + tax;
+    const total = discountedSubtotal + tax + actualDeliveryCharge;
     
     try {
       // Create Razorpay order via edge function FIRST (before creating DB order)
@@ -315,7 +323,7 @@ const Checkout = () => {
   const discount = appliedPromo?.discountAmount || 0;
   const discountedSubtotal = subtotal - discount;
   const tax = Math.round(discountedSubtotal * taxRate);
-  const total = discountedSubtotal + tax;
+  const total = discountedSubtotal + tax + actualDeliveryCharge;
 
   return (
     <Layout>
@@ -669,12 +677,18 @@ const Checkout = () => {
                 )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="text-primary font-medium">Free</span>
+                  {isDeliveryFree ? (
+                    <span className="text-primary font-medium">Free</span>
+                  ) : (
+                    <span>{currencySymbol}{actualDeliveryCharge.toLocaleString('en-IN')}</span>
+                  )}
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>GST ({Math.round(taxRate * 100)}%)</span>
-                  <span>{currencySymbol}{tax.toLocaleString('en-IN')}</span>
-                </div>
+                {taxRate > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax ({Math.round(taxRate * 100)}%)</span>
+                    <span>{currencySymbol}{tax.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-lg font-bold text-foreground pt-2 border-t border-border">
                   <span>Total</span>
                   <span>{currencySymbol}{total.toLocaleString('en-IN')}</span>
