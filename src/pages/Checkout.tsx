@@ -116,30 +116,7 @@ const Checkout = () => {
     const total = subtotal + tax;
     
     try {
-      // First create the order in database with pending_payment status
-      const orderData = await createOrder.mutateAsync({
-        order_id: orderId,
-        customer_name: `${formData.firstName} ${formData.lastName}`,
-        customer_email: formData.email,
-        customer_phone: formData.phone,
-        shipping_address: formData.address,
-        shipping_city: formData.city,
-        shipping_state: formData.state,
-        shipping_zip: formData.zip,
-        items: items.map(item => ({
-          product_id: item.product.id,
-          name: item.product.name,
-          price: item.product.price,
-          quantity: item.quantity
-        })),
-        subtotal,
-        tax,
-        total,
-        payment_method: 'razorpay',
-        status: 'pending_payment'
-      });
-
-      // Create Razorpay order via edge function
+      // Create Razorpay order via edge function FIRST (before creating DB order)
       const { data: razorpayData, error: razorpayError } = await supabase.functions.invoke('create-razorpay-order', {
         body: {
           amount: total,
@@ -154,7 +131,29 @@ const Checkout = () => {
         throw new Error(razorpayData?.error || razorpayError?.message || 'Failed to create payment order');
       }
 
-      // Open Razorpay checkout
+      // Store order data for later use after payment success
+      const orderPayload = {
+        order_id: orderId,
+        customer_name: `${formData.firstName} ${formData.lastName}`,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        shipping_address: formData.address,
+        shipping_city: formData.city,
+        shipping_state: formData.state,
+        shipping_zip: formData.zip,
+        items: items.map(item => ({
+          id: item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity
+        })),
+        subtotal,
+        tax,
+        total,
+        payment_method: 'razorpay'
+      };
+
+      // Open Razorpay checkout - order will only be created after successful payment
       const options = {
         key: razorpayData.key,
         amount: razorpayData.amount,
@@ -176,24 +175,32 @@ const Checkout = () => {
         handler: async function (response: any) {
           console.log('Payment successful:', response);
           
-          // Update order status to processing
+          // Only create order in database AFTER successful payment
           try {
-            await updateOrderStatus.mutateAsync({
-              id: orderData.id,
-              status: 'processing'
+            await createOrder.mutateAsync({
+              ...orderPayload,
+              status: 'processing' // Order is confirmed since payment succeeded
+            });
+            
+            clearCart();
+            toast.success('Payment successful! Order placed.');
+            navigate('/order-confirmation', { 
+              state: { 
+                orderId, 
+                total, 
+                paymentId: response.razorpay_payment_id 
+              } 
             });
           } catch (err) {
-            console.error('Failed to update order status:', err);
+            console.error('Failed to create order after payment:', err);
+            toast.error('Payment received but order creation failed. Please contact support.');
+            setIsSubmitting(false);
           }
-          
-          clearCart();
-          toast.success('Payment successful!');
-          navigate('/order-confirmation', { state: { orderId, total, paymentId: response.razorpay_payment_id } });
         },
         modal: {
           ondismiss: function() {
             setIsSubmitting(false);
-            toast.info('Payment cancelled. Your order is saved and you can try again.');
+            toast.info('Payment cancelled. No order was placed.');
           }
         }
       };
@@ -201,7 +208,7 @@ const Checkout = () => {
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', function (response: any) {
         console.error('Payment failed:', response.error);
-        toast.error(`Payment failed: ${response.error.description}`);
+        toast.error(`Payment failed: ${response.error.description}. No order was placed.`);
         setIsSubmitting(false);
       });
       
@@ -457,11 +464,20 @@ const Checkout = () => {
                   </RadioGroup>
 
                   {paymentMethod === 'online' && (
-                    <div className="bg-accent/30 rounded-2xl p-4">
-                      <p className="text-sm text-muted-foreground">
-                        You will be redirected to Razorpay's secure payment gateway to complete your payment.
-                        All major payment methods including UPI, cards, net banking, and wallets are supported.
+                    <div className="bg-primary/10 border border-primary/20 rounded-2xl p-4 space-y-2">
+                      <p className="text-sm font-medium text-foreground">
+                        🔒 Secure Payment via Razorpay
                       </p>
+                      <p className="text-sm text-muted-foreground">
+                        Click "Proceed to Pay" to open Razorpay's secure payment page. Your order will only be placed after successful payment.
+                      </p>
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        <span className="text-xs bg-background px-2 py-1 rounded-full text-muted-foreground">UPI</span>
+                        <span className="text-xs bg-background px-2 py-1 rounded-full text-muted-foreground">Credit Card</span>
+                        <span className="text-xs bg-background px-2 py-1 rounded-full text-muted-foreground">Debit Card</span>
+                        <span className="text-xs bg-background px-2 py-1 rounded-full text-muted-foreground">Net Banking</span>
+                        <span className="text-xs bg-background px-2 py-1 rounded-full text-muted-foreground">Wallets</span>
+                      </div>
                     </div>
                   )}
 
