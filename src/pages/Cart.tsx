@@ -9,6 +9,21 @@ const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
   const { data: settings } = useBusinessSettings();
   const currencySymbol = settings?.currency_symbol || '₹';
+  
+  // Get tax and delivery settings
+  const taxRate = parseFloat(settings?.tax_rate || '0') / 100;
+  const deliveryCharge = parseFloat(settings?.delivery_charge || '0');
+  const deliveryType = settings?.delivery_type || 'free';
+  const freeDeliveryThreshold = parseFloat(settings?.free_delivery_threshold || '0');
+  
+  // Calculate if delivery is free based on settings
+  const isDeliveryFree = deliveryType === 'free' || 
+    (deliveryType === 'threshold' && totalPrice >= freeDeliveryThreshold);
+  const actualDeliveryCharge = isDeliveryFree ? 0 : deliveryCharge;
+  
+  // Calculate totals
+  const taxAmount = Math.round(totalPrice * taxRate);
+  const grandTotal = totalPrice + taxAmount + actualDeliveryCharge;
 
   if (items.length === 0) {
     return (
@@ -116,18 +131,24 @@ const Cart = () => {
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
-                  <span className="text-primary font-medium">Free</span>
+                  {isDeliveryFree ? (
+                    <span className="text-primary font-medium">Free</span>
+                  ) : (
+                    <span>{currencySymbol}{actualDeliveryCharge.toLocaleString('en-IN')}</span>
+                  )}
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Tax (18% GST)</span>
-                  <span>{currencySymbol}{Math.round(totalPrice * 0.18).toLocaleString('en-IN')}</span>
-                </div>
+                {taxRate > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax ({Math.round(taxRate * 100)}%)</span>
+                    <span>{currencySymbol}{taxAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-border pt-4 mb-6">
                 <div className="flex justify-between text-lg font-bold text-foreground">
                   <span>Total</span>
-                  <span>{currencySymbol}{Math.round(totalPrice * 1.18).toLocaleString('en-IN')}</span>
+                  <span>{currencySymbol}{grandTotal.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 

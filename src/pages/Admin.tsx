@@ -121,7 +121,10 @@ const Admin = () => {
     business_phone: '',
     business_address: '',
     currency_symbol: '',
-    tax_rate: ''
+    tax_rate: '',
+    delivery_charge: '',
+    delivery_type: 'free',
+    free_delivery_threshold: ''
   });
 
   useEffect(() => {
@@ -133,7 +136,10 @@ const Admin = () => {
         business_phone: settings.business_phone || '',
         business_address: settings.business_address || '',
         currency_symbol: settings.currency_symbol || '₹',
-        tax_rate: settings.tax_rate || '18'
+        tax_rate: settings.tax_rate || '0',
+        delivery_charge: settings.delivery_charge || '0',
+        delivery_type: settings.delivery_type || 'free',
+        free_delivery_threshold: settings.free_delivery_threshold || '0'
       });
     }
   }, [settings]);
@@ -807,15 +813,60 @@ const Admin = () => {
                         className="rounded-full"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Tax Rate (%)</Label>
-                      <Input
-                        type="number"
-                        value={businessForm.tax_rate}
-                        onChange={(e) => setBusinessForm({ ...businessForm, tax_rate: e.target.value })}
-                        className="rounded-full w-32"
-                      />
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Tax Rate (%)</Label>
+                        <Input
+                          type="number"
+                          value={businessForm.tax_rate}
+                          onChange={(e) => setBusinessForm({ ...businessForm, tax_rate: e.target.value })}
+                          className="rounded-full"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Delivery Type</Label>
+                        <Select 
+                          value={businessForm.delivery_type} 
+                          onValueChange={(value) => setBusinessForm({ ...businessForm, delivery_type: value })}
+                        >
+                          <SelectTrigger className="rounded-full">
+                            <SelectValue placeholder="Select delivery type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="free">Free Delivery</SelectItem>
+                            <SelectItem value="fixed">Fixed Charge</SelectItem>
+                            <SelectItem value="threshold">Free Above Threshold</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+                    {businessForm.delivery_type !== 'free' && (
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Delivery Charge ({settings?.currency_symbol || '₹'})</Label>
+                          <Input
+                            type="number"
+                            value={businessForm.delivery_charge}
+                            onChange={(e) => setBusinessForm({ ...businessForm, delivery_charge: e.target.value })}
+                            className="rounded-full"
+                            placeholder="0"
+                          />
+                        </div>
+                        {businessForm.delivery_type === 'threshold' && (
+                          <div className="space-y-2">
+                            <Label>Free Delivery Above ({settings?.currency_symbol || '₹'})</Label>
+                            <Input
+                              type="number"
+                              value={businessForm.free_delivery_threshold}
+                              onChange={(e) => setBusinessForm({ ...businessForm, free_delivery_threshold: e.target.value })}
+                              className="rounded-full"
+                              placeholder="500"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
