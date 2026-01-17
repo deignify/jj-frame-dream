@@ -13,7 +13,7 @@ const Footer = () => {
   return (
     <footer className="bg-card border-t border-border">
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -74,6 +74,28 @@ const Footer = () => {
               <li>
                 <Link to="/track-order" className="text-muted-foreground text-sm hover:text-primary transition-colors">
                   Track Order
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <h4 className="font-semibold text-foreground mb-4">Legal</h4>
+            <ul className="space-y-2">
+              <li>
+                <Link to="/privacy-policy" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Privacy Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/terms-of-service" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/refund-policy" className="text-muted-foreground text-sm hover:text-primary transition-colors">
+                  Refund Policy
                 </Link>
               </li>
             </ul>

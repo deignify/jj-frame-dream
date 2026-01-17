@@ -140,6 +140,49 @@ const Checkout = () => {
     toast.info('Promo code removed');
   };
 
+  const sendOrderConfirmationEmail = async (orderData: {
+    orderId: string;
+    subtotal: number;
+    tax: number;
+    shipping: number;
+    discount: number;
+    total: number;
+    paymentMethod: string;
+  }) => {
+    try {
+      await supabase.functions.invoke('send-order-email', {
+        body: {
+          customerName: `${formData.firstName} ${formData.lastName}`,
+          customerEmail: formData.email,
+          orderId: orderData.orderId,
+          items: items.map(item => ({
+            name: item.product.name,
+            price: item.product.price,
+            quantity: item.quantity
+          })),
+          subtotal: orderData.subtotal,
+          tax: orderData.tax,
+          shipping: orderData.shipping,
+          discount: orderData.discount,
+          total: orderData.total,
+          shippingAddress: formData.address,
+          shippingCity: formData.city,
+          shippingState: formData.state,
+          shippingZip: formData.zip,
+          paymentMethod: orderData.paymentMethod,
+          businessName: settings?.business_name || 'JJ Frame Studio',
+          businessEmail: settings?.business_email || 'hello@jjframestudio.com',
+          businessPhone: settings?.business_phone || '+91 98765 43210',
+          currencySymbol
+        }
+      });
+      console.log('Order confirmation email sent successfully');
+    } catch (error) {
+      console.error('Failed to send order confirmation email:', error);
+      // Don't fail the order if email fails
+    }
+  };
+
   const handleCODOrder = async () => {
     setIsSubmitting(true);
     
@@ -171,6 +214,17 @@ const Checkout = () => {
         total,
         payment_method: 'cod',
         status: 'pending'
+      });
+
+      // Send order confirmation email
+      await sendOrderConfirmationEmail({
+        orderId,
+        subtotal: discountedSubtotal,
+        tax,
+        shipping: actualDeliveryCharge,
+        discount,
+        total,
+        paymentMethod: 'cod'
       });
 
       // Increment promo code usage if applied
@@ -269,6 +323,17 @@ const Checkout = () => {
             await createOrder.mutateAsync({
               ...orderPayload,
               status: 'processing' // Order is confirmed since payment succeeded
+            });
+
+            // Send order confirmation email
+            await sendOrderConfirmationEmail({
+              orderId,
+              subtotal: discountedSubtotal,
+              tax,
+              shipping: actualDeliveryCharge,
+              discount,
+              total,
+              paymentMethod: 'razorpay'
             });
             
             // Increment promo code usage if applied
