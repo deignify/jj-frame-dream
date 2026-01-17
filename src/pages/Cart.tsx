@@ -1,13 +1,23 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Minus, Plus, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Tag, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import Layout from '@/components/Layout';
 import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
+import { useValidatePromoCode, PromoCode } from '@/hooks/usePromoCodes';
+import { toast } from 'sonner';
 
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
   const { data: settings } = useBusinessSettings();
+  const validatePromoCode = useValidatePromoCode();
+  
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; promoData: PromoCode } | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  
   const currencySymbol = settings?.currency_symbol || '₹';
   
   // Get tax and delivery settings
@@ -21,9 +31,50 @@ const Cart = () => {
     (deliveryType === 'threshold' && totalPrice >= freeDeliveryThreshold);
   const actualDeliveryCharge = isDeliveryFree ? 0 : deliveryCharge;
   
-  // Calculate totals
-  const taxAmount = Math.round(totalPrice * taxRate);
-  const grandTotal = totalPrice + taxAmount + actualDeliveryCharge;
+  // Calculate totals with promo discount
+  const discount = appliedPromo?.discountAmount || 0;
+  const discountedSubtotal = totalPrice - discount;
+  const taxAmount = Math.round(discountedSubtotal * taxRate);
+  const grandTotal = discountedSubtotal + taxAmount + actualDeliveryCharge;
+
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) {
+      toast.error('Please enter a promo code');
+      return;
+    }
+
+    setIsValidatingPromo(true);
+    try {
+      const promo = await validatePromoCode.mutateAsync({
+        code: promoCode.trim(),
+        orderAmount: totalPrice,
+      });
+
+      let discountAmount = 0;
+      if (promo.discount_type === 'percentage') {
+        discountAmount = Math.round(totalPrice * (promo.discount_value / 100));
+      } else {
+        discountAmount = Math.min(promo.discount_value, totalPrice);
+      }
+
+      setAppliedPromo({
+        code: promo.code,
+        discountAmount,
+        promoData: promo,
+      });
+      toast.success(`Promo code applied! You save ${currencySymbol}${discountAmount.toLocaleString('en-IN')}`);
+    } catch (error: any) {
+      toast.error(error.message || 'Invalid promo code');
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode('');
+    toast.info('Promo code removed');
+  };
 
   if (items.length === 0) {
     return (
@@ -124,11 +175,61 @@ const Cart = () => {
             <div className="bg-card rounded-3xl p-6 sticky top-24">
               <h2 className="text-xl font-bold text-foreground mb-6">Order Summary</h2>
 
+              {/* Promo Code Section */}
+              <div className="mb-6">
+                <label className="text-sm font-medium text-foreground mb-2 block">Promo Code</label>
+                {appliedPromo ? (
+                  <div className="flex items-center justify-between bg-primary/10 rounded-full px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-primary">{appliedPromo.code}</span>
+                      <span className="text-sm text-muted-foreground">
+                        (-{currencySymbol}{appliedPromo.discountAmount.toLocaleString('en-IN')})
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 rounded-full"
+                      onClick={handleRemovePromo}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter code"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      className="rounded-full"
+                    />
+                    <Button
+                      onClick={handleApplyPromo}
+                      disabled={isValidatingPromo}
+                      className="rounded-full"
+                    >
+                      {isValidatingPromo ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal ({totalItems} items)</span>
                   <span>{currencySymbol}{totalPrice.toLocaleString('en-IN')}</span>
                 </div>
+                {appliedPromo && (
+                  <div className="flex justify-between text-primary">
+                    <span>Discount</span>
+                    <span>-{currencySymbol}{appliedPromo.discountAmount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
                   {isDeliveryFree ? (
