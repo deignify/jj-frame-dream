@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CreditCard, Truck, User, MapPin } from 'lucide-react';
+import { ChevronRight, CreditCard, Truck, User, MapPin, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,19 +8,42 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import Layout from '@/components/Layout';
 import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
-import { useCreateOrder } from '@/hooks/useOrders';
+import { useCreateOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, clearCart } = useCart();
   const { data: settings } = useBusinessSettings();
   const createOrder = useCreateOrder();
+  const updateOrderStatus = useUpdateOrderStatus();
   const [step, setStep] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
 
   const currencySymbol = settings?.currency_symbol || '₹';
   const taxRate = parseFloat(settings?.tax_rate || '18') / 100;
+
+  // Load Razorpay script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -38,10 +61,9 @@ const Checkout = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handlePlaceOrder = async () => {
+  const handleCODOrder = async () => {
     setIsSubmitting(true);
     
-    // Generate order ID
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const subtotal = totalPrice;
     const tax = Math.round(subtotal * taxRate);
@@ -66,7 +88,7 @@ const Checkout = () => {
         subtotal,
         tax,
         total,
-        payment_method: paymentMethod,
+        payment_method: 'cod',
         status: 'pending'
       });
 
@@ -74,8 +96,128 @@ const Checkout = () => {
       navigate('/order-confirmation', { state: { orderId, total } });
     } catch (error) {
       console.error('Order creation failed:', error);
+      toast.error('Failed to place order. Please try again.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRazorpayPayment = async () => {
+    if (!razorpayLoaded) {
+      toast.error('Payment gateway is loading. Please try again.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+    const subtotal = totalPrice;
+    const tax = Math.round(subtotal * taxRate);
+    const total = subtotal + tax;
+    
+    try {
+      // First create the order in database with pending_payment status
+      const orderData = await createOrder.mutateAsync({
+        order_id: orderId,
+        customer_name: `${formData.firstName} ${formData.lastName}`,
+        customer_email: formData.email,
+        customer_phone: formData.phone,
+        shipping_address: formData.address,
+        shipping_city: formData.city,
+        shipping_state: formData.state,
+        shipping_zip: formData.zip,
+        items: items.map(item => ({
+          product_id: item.product.id,
+          name: item.product.name,
+          price: item.product.price,
+          quantity: item.quantity
+        })),
+        subtotal,
+        tax,
+        total,
+        payment_method: 'razorpay',
+        status: 'pending_payment'
+      });
+
+      // Create Razorpay order via edge function
+      const { data: razorpayData, error: razorpayError } = await supabase.functions.invoke('create-razorpay-order', {
+        body: {
+          amount: total,
+          currency: 'INR',
+          orderId: orderId,
+          customerName: `${formData.firstName} ${formData.lastName}`,
+          customerEmail: formData.email
+        }
+      });
+
+      if (razorpayError || razorpayData?.error) {
+        throw new Error(razorpayData?.error || razorpayError?.message || 'Failed to create payment order');
+      }
+
+      // Open Razorpay checkout
+      const options = {
+        key: razorpayData.key,
+        amount: razorpayData.amount,
+        currency: razorpayData.currency,
+        name: settings?.business_name || 'JJ Frame Dream',
+        description: `Order ${orderId}`,
+        order_id: razorpayData.id,
+        prefill: {
+          name: `${formData.firstName} ${formData.lastName}`,
+          email: formData.email,
+          contact: formData.phone
+        },
+        notes: {
+          order_id: orderId
+        },
+        theme: {
+          color: '#6366f1'
+        },
+        handler: async function (response: any) {
+          console.log('Payment successful:', response);
+          
+          // Update order status to processing
+          try {
+            await updateOrderStatus.mutateAsync({
+              id: orderData.id,
+              status: 'processing'
+            });
+          } catch (err) {
+            console.error('Failed to update order status:', err);
+          }
+          
+          clearCart();
+          toast.success('Payment successful!');
+          navigate('/order-confirmation', { state: { orderId, total, paymentId: response.razorpay_payment_id } });
+        },
+        modal: {
+          ondismiss: function() {
+            setIsSubmitting(false);
+            toast.info('Payment cancelled. Your order is saved and you can try again.');
+          }
+        }
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.on('payment.failed', function (response: any) {
+        console.error('Payment failed:', response.error);
+        toast.error(`Payment failed: ${response.error.description}`);
+        setIsSubmitting(false);
+      });
+      
+      razorpay.open();
+    } catch (error: any) {
+      console.error('Payment error:', error);
+      toast.error(error.message || 'Payment failed. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    if (paymentMethod === 'cod') {
+      await handleCODOrder();
+    } else {
+      await handleRazorpayPayment();
     }
   };
 
@@ -304,41 +446,22 @@ const Checkout = () => {
                     }`}>
                       <RadioGroupItem value="online" />
                       <CreditCard className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium text-foreground">Pay Online</p>
-                        <p className="text-sm text-muted-foreground">UPI, Credit/Debit Card, Net Banking</p>
+                      <div className="flex-1">
+                        <p className="font-medium text-foreground">Pay Online (Razorpay)</p>
+                        <p className="text-sm text-muted-foreground">UPI, Credit/Debit Card, Net Banking, Wallets</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <img src="https://razorpay.com/assets/razorpay-glyph.svg" alt="Razorpay" className="h-6" />
                       </div>
                     </label>
                   </RadioGroup>
 
                   {paymentMethod === 'online' && (
-                    <div className="space-y-4 pt-4 border-t border-border">
-                      <div className="space-y-2">
-                        <Label htmlFor="cardNumber">Card Number</Label>
-                        <Input
-                          id="cardNumber"
-                          className="rounded-full"
-                          placeholder="1234 5678 9012 3456"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="expiry">Expiry Date</Label>
-                          <Input
-                            id="expiry"
-                            className="rounded-full"
-                            placeholder="MM/YY"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cvv">CVV</Label>
-                          <Input
-                            id="cvv"
-                            className="rounded-full"
-                            placeholder="123"
-                          />
-                        </div>
-                      </div>
+                    <div className="bg-accent/30 rounded-2xl p-4">
+                      <p className="text-sm text-muted-foreground">
+                        You will be redirected to Razorpay's secure payment gateway to complete your payment.
+                        All major payment methods including UPI, cards, net banking, and wallets are supported.
+                      </p>
                     </div>
                   )}
 
@@ -351,7 +474,16 @@ const Checkout = () => {
                       className="flex-1 rounded-full"
                       disabled={isSubmitting}
                     >
-                      {isSubmitting ? 'Placing Order...' : 'Place Order'}
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : paymentMethod === 'cod' ? (
+                        'Place Order'
+                      ) : (
+                        'Proceed to Pay'
+                      )}
                     </Button>
                   </div>
                 </div>
