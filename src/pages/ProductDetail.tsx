@@ -236,28 +236,31 @@ const ProductDetail = () => {
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button
-                size="lg"
-                className="flex-1 rounded-full"
-                onClick={handleAddToCart}
-                disabled={!product.in_stock}
-              >
-                <ShoppingCart className="h-5 w-5 mr-2" />
-                Add to Cart
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="flex-1 rounded-full"
-                onClick={handleBuyNow}
-                disabled={!product.in_stock}
-              >
-                Buy Now
-              </Button>
-              <Button size="lg" variant="ghost" className="rounded-full px-4">
-                <Heart className="h-5 w-5" />
+            {/* Action Buttons - Combined Box */}
+            <div className="bg-card rounded-2xl p-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Button
+                  size="lg"
+                  className="h-14 rounded-xl text-base font-semibold"
+                  onClick={handleAddToCart}
+                  disabled={!product.in_stock}
+                >
+                  <ShoppingCart className="h-5 w-5 mr-2" />
+                  Add to Cart
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="h-14 rounded-xl text-base font-semibold"
+                  onClick={handleBuyNow}
+                  disabled={!product.in_stock}
+                >
+                  Buy Now
+                </Button>
+              </div>
+              <Button size="lg" variant="ghost" className="w-full h-12 rounded-xl">
+                <Heart className="h-5 w-5 mr-2" />
+                Add to Wishlist
               </Button>
             </div>
 
