@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -84,6 +84,10 @@ const Admin = () => {
   // Pagination states
   const [productPage, setProductPage] = useState(1);
   const [orderPage, setOrderPage] = useState(1);
+  
+  // Filter states
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -148,8 +152,26 @@ const Admin = () => {
   const paginatedProducts = products?.slice((productPage - 1) * ITEMS_PER_PAGE, productPage * ITEMS_PER_PAGE) || [];
   const totalProductPages = Math.ceil((products?.length || 0) / ITEMS_PER_PAGE);
   
-  const paginatedOrders = orders?.slice((orderPage - 1) * ITEMS_PER_PAGE, orderPage * ITEMS_PER_PAGE) || [];
-  const totalOrderPages = Math.ceil((orders?.length || 0) / ITEMS_PER_PAGE);
+  // Filter orders based on search and status
+  const filteredOrders = useMemo(() => {
+    if (!orders) return [];
+    return orders.filter(order => {
+      const matchesSearch = orderSearch === '' || 
+        order.order_id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        order.customer_name.toLowerCase().includes(orderSearch.toLowerCase()) ||
+        order.customer_email.toLowerCase().includes(orderSearch.toLowerCase());
+      const matchesStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, orderSearch, orderStatusFilter]);
+  
+  const paginatedOrders = filteredOrders.slice((orderPage - 1) * ITEMS_PER_PAGE, orderPage * ITEMS_PER_PAGE);
+  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+  
+  // Reset order page when filters change
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch, orderStatusFilter]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -559,18 +581,56 @@ const Admin = () => {
           {/* Orders Tab */}
           <TabsContent value="orders">
             <div className="bg-card rounded-3xl p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-foreground">Orders ({orders?.length || 0})</h2>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-xl font-bold text-foreground">
+                  Orders ({filteredOrders.length}{filteredOrders.length !== (orders?.length || 0) ? ` of ${orders?.length}` : ''})
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:flex-initial">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search orders..."
+                      value={orderSearch}
+                      onChange={(e) => setOrderSearch(e.target.value)}
+                      className="pl-9 rounded-full w-full sm:w-48"
+                    />
+                  </div>
+                  <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                    <SelectTrigger className="rounded-full w-32">
+                      <Filter className="h-4 w-4 mr-2" />
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="processing">Processing</SelectItem>
+                      <SelectItem value="shipped">Shipped</SelectItem>
+                      <SelectItem value="delivered">Delivered</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {ordersLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : orders?.length === 0 ? (
+              ) : filteredOrders.length === 0 ? (
                 <div className="text-center py-12">
                   <ShoppingCart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No orders yet</p>
+                  <p className="text-muted-foreground">
+                    {orders?.length === 0 ? 'No orders yet' : 'No orders match your filters'}
+                  </p>
+                  {orders && orders.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      className="mt-4 rounded-full"
+                      onClick={() => { setOrderSearch(''); setOrderStatusFilter('all'); }}
+                    >
+                      Clear Filters
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <>

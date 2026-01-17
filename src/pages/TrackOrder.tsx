@@ -47,19 +47,20 @@ const TrackOrder = () => {
     setSearched(true);
 
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('order_id', orderId.trim())
-        .eq('customer_email', email.trim().toLowerCase())
-        .maybeSingle();
+      // Use secure edge function to lookup order (bypasses RLS safely)
+      const { data: response, error } = await supabase.functions.invoke('lookup-order', {
+        body: {
+          orderId: orderId.trim(),
+          email: email.trim().toLowerCase()
+        }
+      });
 
       if (error) throw error;
 
-      if (data) {
+      if (response?.order) {
         setOrder({
-          ...data,
-          items: data.items as unknown as OrderItem[]
+          ...response.order,
+          items: response.order.items as unknown as OrderItem[]
         } as Order);
       } else {
         setOrder(null);
