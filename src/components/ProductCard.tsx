@@ -111,26 +111,26 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
         
         {/* Action Buttons - in a box */}
         {showActions && (
-          <div className="mt-3 bg-muted/50 rounded-xl p-2.5">
-            <div className="grid grid-cols-2 gap-2">
+          <div className="mt-3 bg-muted/50 rounded-xl p-2">
+            <div className="flex flex-col gap-1.5">
               <Button 
                 onClick={handleAddToCart}
                 variant="outline"
-                className="rounded-lg h-10 text-xs font-medium border-border/80 hover:border-primary hover:bg-primary/5"
+                className="w-full rounded-lg h-9 text-[11px] font-medium border-border/80 hover:border-primary hover:bg-primary/5 px-2"
                 size="sm"
                 disabled={!product.in_stock}
               >
-                <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                Add to Cart
+                <ShoppingCart className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
+                <span className="truncate">Add to Cart</span>
               </Button>
               <Button 
                 onClick={handleBuyNow}
-                className="rounded-lg h-10 text-xs font-medium shadow-sm hover:shadow-md transition-shadow"
+                className="w-full rounded-lg h-9 text-[11px] font-medium shadow-sm hover:shadow-md transition-shadow px-2"
                 size="sm"
                 disabled={!product.in_stock}
               >
-                <ShoppingBag className="h-3.5 w-3.5 mr-1.5" />
-                Buy Now
+                <ShoppingBag className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
+                <span className="truncate">Buy Now</span>
               </Button>
             </div>
           </div>
