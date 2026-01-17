@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +15,7 @@ import { useBusinessSettings, useUpdateBusinessSettings } from '@/hooks/useBusin
 import { usePromoCodes, useCreatePromoCode, useUpdatePromoCode, useDeletePromoCode, PromoCode } from '@/hooks/usePromoCodes';
 import { useAuth } from '@/hooks/useAuth';
 import { ImageUpload, MultiImageUpload } from '@/components/ImageUpload';
+import { BulkProductCSV } from '@/components/BulkProductCSV';
 import { toast } from 'sonner';
 import {
   Pagination,
@@ -443,15 +444,18 @@ const Admin = () => {
           {/* Products Tab */}
           <TabsContent value="products">
             <div className="bg-card rounded-3xl p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <h2 className="text-xl font-bold text-foreground">Products ({products?.length || 0})</h2>
-                <Button 
-                  className="rounded-full"
-                  onClick={() => { resetForm(); setIsDialogOpen(true); }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Product
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BulkProductCSV products={products || []} />
+                  <Button 
+                    className="rounded-full"
+                    onClick={() => { resetForm(); setIsDialogOpen(true); }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Product
+                  </Button>
+                </div>
               </div>
 
               {productsLoading ? (
