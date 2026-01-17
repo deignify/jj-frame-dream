@@ -18,6 +18,9 @@ import FAQ from "./pages/FAQ";
 import ShippingInfo from "./pages/ShippingInfo";
 import Returns from "./pages/Returns";
 import TrackOrder from "./pages/TrackOrder";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import RefundPolicy from "./pages/RefundPolicy";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -44,6 +47,9 @@ const App = () => (
             <Route path="/shipping-info" element={<ShippingInfo />} />
             <Route path="/returns" element={<Returns />} />
             <Route path="/track-order" element={<TrackOrder />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/refund-policy" element={<RefundPolicy />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
