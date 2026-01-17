@@ -23,15 +23,19 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product);
-    toast.success(`${product.name} added to cart!`);
+    const success = addToCart(product);
+    if (success) {
+      toast.success(`${product.name} added to cart!`);
+    }
   };
 
   const handleBuyNow = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart(product);
-    navigate('/checkout');
+    const success = addToCart(product);
+    if (success) {
+      navigate('/checkout');
+    }
   };
 
   const handleQuickView = (e: React.MouseEvent) => {

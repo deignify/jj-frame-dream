@@ -13,6 +13,12 @@ import { useValidatePromoCode, useIncrementPromoCodeUsage } from '@/hooks/usePro
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+// Type for stock check result
+interface StockCheckResult {
+  isValid: boolean;
+  outOfStockItems: { name: string; available: number; requested: number }[];
+}
+
 declare global {
   interface Window {
     Razorpay: any;
@@ -28,7 +34,7 @@ interface AppliedPromo {
 
 const Checkout = () => {
   const navigate = useNavigate();
-  const { items, totalPrice, clearCart } = useCart();
+  const { items, totalPrice, clearCart, refreshProductStock } = useCart();
   const { data: settings } = useBusinessSettings();
   const createOrder = useCreateOrder();
   const updateOrderStatus = useUpdateOrderStatus();
@@ -183,8 +189,68 @@ const Checkout = () => {
     }
   };
 
+  // Verify stock availability before placing order
+  const verifyStockAvailability = async (): Promise<StockCheckResult> => {
+    const productIds = items.map(item => item.product.id);
+    
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('id, name, stock_quantity, in_stock')
+      .in('id', productIds);
+    
+    if (error) {
+      console.error('Error checking stock:', error);
+      throw new Error('Failed to verify stock availability');
+    }
+    
+    const outOfStockItems: StockCheckResult['outOfStockItems'] = [];
+    
+    for (const item of items) {
+      const product = products?.find(p => p.id === item.product.id);
+      if (!product) {
+        outOfStockItems.push({ 
+          name: item.product.name, 
+          available: 0, 
+          requested: item.quantity 
+        });
+      } else if (!product.in_stock || product.stock_quantity < item.quantity) {
+        outOfStockItems.push({ 
+          name: item.product.name, 
+          available: product.stock_quantity, 
+          requested: item.quantity 
+        });
+        // Update cart with fresh stock data
+        refreshProductStock(item.product.id, product.stock_quantity);
+      }
+    }
+    
+    return {
+      isValid: outOfStockItems.length === 0,
+      outOfStockItems
+    };
+  };
+
   const handleCODOrder = async () => {
     setIsSubmitting(true);
+    
+    try {
+      // Verify stock before proceeding
+      const stockCheck = await verifyStockAvailability();
+      if (!stockCheck.isValid) {
+        const messages = stockCheck.outOfStockItems.map(item => 
+          item.available === 0 
+            ? `${item.name} is out of stock` 
+            : `${item.name}: only ${item.available} available (you requested ${item.requested})`
+        );
+        toast.error(`Stock issue: ${messages.join('. ')}`);
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (error) {
+      toast.error('Failed to verify stock. Please try again.');
+      setIsSubmitting(false);
+      return;
+    }
     
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const subtotal = totalPrice;
@@ -250,6 +316,25 @@ const Checkout = () => {
     }
 
     setIsSubmitting(true);
+    
+    try {
+      // Verify stock before proceeding
+      const stockCheck = await verifyStockAvailability();
+      if (!stockCheck.isValid) {
+        const messages = stockCheck.outOfStockItems.map(item => 
+          item.available === 0 
+            ? `${item.name} is out of stock` 
+            : `${item.name}: only ${item.available} available (you requested ${item.requested})`
+        );
+        toast.error(`Stock issue: ${messages.join('. ')}`);
+        setIsSubmitting(false);
+        return;
+      }
+    } catch (error) {
+      toast.error('Failed to verify stock. Please try again.');
+      setIsSubmitting(false);
+      return;
+    }
     
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const subtotal = totalPrice;

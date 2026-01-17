@@ -186,14 +186,20 @@ const Cart = () => {
                         size="icon"
                         className="rounded-full h-8 w-8"
                         onClick={() => updateQuantity(product.id, quantity + 1)}
+                        disabled={quantity >= product.stock_quantity}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
 
-                    <p className="text-lg font-bold text-primary">
-                      {currencySymbol}{(product.price * quantity).toLocaleString('en-IN')}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-lg font-bold text-primary">
+                        {currencySymbol}{(product.price * quantity).toLocaleString('en-IN')}
+                      </p>
+                      {quantity >= product.stock_quantity && (
+                        <p className="text-xs text-amber-600">Max stock: {product.stock_quantity}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
