@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Minus, Plus, Trash2, ShoppingBag, ArrowRight, Tag, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,13 +9,22 @@ import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useValidatePromoCode, PromoCode } from '@/hooks/usePromoCodes';
 import { toast } from 'sonner';
 
+interface StoredPromo {
+  code: string;
+  discountAmount: number;
+  promoData: PromoCode;
+}
+
 const Cart = () => {
   const { items, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
   const { data: settings } = useBusinessSettings();
   const validatePromoCode = useValidatePromoCode();
   
   const [promoCode, setPromoCode] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<{ code: string; discountAmount: number; promoData: PromoCode } | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<StoredPromo | null>(() => {
+    const saved = localStorage.getItem('appliedPromo');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
   
   const currencySymbol = settings?.currency_symbol || '₹';
@@ -30,6 +39,23 @@ const Cart = () => {
   const isDeliveryFree = deliveryType === 'free' || 
     (deliveryType === 'threshold' && totalPrice >= freeDeliveryThreshold);
   const actualDeliveryCharge = isDeliveryFree ? 0 : deliveryCharge;
+  
+  // Recalculate discount when totalPrice changes (in case items changed)
+  useEffect(() => {
+    if (appliedPromo && totalPrice > 0) {
+      let discountAmount = 0;
+      if (appliedPromo.promoData.discount_type === 'percentage') {
+        discountAmount = Math.round(totalPrice * (appliedPromo.promoData.discount_value / 100));
+      } else {
+        discountAmount = Math.min(appliedPromo.promoData.discount_value, totalPrice);
+      }
+      if (discountAmount !== appliedPromo.discountAmount) {
+        const updatedPromo = { ...appliedPromo, discountAmount };
+        setAppliedPromo(updatedPromo);
+        localStorage.setItem('appliedPromo', JSON.stringify(updatedPromo));
+      }
+    }
+  }, [totalPrice]);
   
   // Calculate totals with promo discount
   const discount = appliedPromo?.discountAmount || 0;
@@ -57,11 +83,14 @@ const Cart = () => {
         discountAmount = Math.min(promo.discount_value, totalPrice);
       }
 
-      setAppliedPromo({
+      const promoToStore: StoredPromo = {
         code: promo.code,
         discountAmount,
         promoData: promo,
-      });
+      };
+      
+      setAppliedPromo(promoToStore);
+      localStorage.setItem('appliedPromo', JSON.stringify(promoToStore));
       toast.success(`Promo code applied! You save ${currencySymbol}${discountAmount.toLocaleString('en-IN')}`);
     } catch (error: any) {
       toast.error(error.message || 'Invalid promo code');
@@ -73,6 +102,7 @@ const Cart = () => {
   const handleRemovePromo = () => {
     setAppliedPromo(null);
     setPromoCode('');
+    localStorage.removeItem('appliedPromo');
     toast.info('Promo code removed');
   };
 

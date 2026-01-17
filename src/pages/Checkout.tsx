@@ -39,9 +39,21 @@ const Checkout = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   
-  // Promo code state
+  // Promo code state - load from localStorage if available
   const [promoCode, setPromoCode] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(() => {
+    const saved = localStorage.getItem('appliedPromo');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        code: parsed.code,
+        discount_type: parsed.promoData.discount_type,
+        discount_value: parsed.promoData.discount_value,
+        discountAmount: parsed.discountAmount
+      };
+    }
+    return null;
+  });
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const currencySymbol = settings?.currency_symbol || '₹';
@@ -124,6 +136,7 @@ const Checkout = () => {
   const handleRemovePromo = () => {
     setAppliedPromo(null);
     setPromoCode('');
+    localStorage.removeItem('appliedPromo');
     toast.info('Promo code removed');
   };
 
@@ -163,6 +176,7 @@ const Checkout = () => {
       // Increment promo code usage if applied
       if (appliedPromo) {
         await incrementPromoCodeUsage.mutateAsync(appliedPromo.code);
+        localStorage.removeItem('appliedPromo');
       }
 
       clearCart();
@@ -260,6 +274,7 @@ const Checkout = () => {
             // Increment promo code usage if applied
             if (appliedPromo) {
               await incrementPromoCodeUsage.mutateAsync(appliedPromo.code);
+              localStorage.removeItem('appliedPromo');
             }
             
             clearCart();
