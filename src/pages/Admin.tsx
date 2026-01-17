@@ -121,10 +121,7 @@ const Admin = () => {
     business_phone: '',
     business_address: '',
     currency_symbol: '',
-    tax_rate: '',
-    razorpay_key_id: '',
-    razorpay_key_secret: '',
-    razorpay_webhook_secret: ''
+    tax_rate: ''
   });
 
   useEffect(() => {
@@ -136,10 +133,7 @@ const Admin = () => {
         business_phone: settings.business_phone || '',
         business_address: settings.business_address || '',
         currency_symbol: settings.currency_symbol || '₹',
-        tax_rate: settings.tax_rate || '18',
-        razorpay_key_id: settings.razorpay_key_id || '',
-        razorpay_key_secret: settings.razorpay_key_secret || '',
-        razorpay_webhook_secret: settings.razorpay_webhook_secret || ''
+        tax_rate: settings.tax_rate || '18'
       });
     }
   }, [settings]);
@@ -826,50 +820,16 @@ const Admin = () => {
                 )}
               </div>
 
-              {/* Razorpay Settings */}
-              <div className="bg-card rounded-3xl p-6">
-                <div className="flex items-center gap-3 mb-6">
+              {/* Payment Settings Info */}
+              <div className="bg-accent/50 rounded-3xl p-6">
+                <div className="flex items-center gap-3 mb-4">
                   <CreditCard className="h-5 w-5 text-primary" />
-                  <h2 className="text-xl font-bold text-foreground">Razorpay Settings</h2>
+                  <h2 className="text-xl font-bold text-foreground">Payment Gateway</h2>
                 </div>
-                
-                <div className="space-y-4 max-w-2xl">
-                  <div className="space-y-2">
-                    <Label>Razorpay Key ID</Label>
-                    <Input
-                      value={businessForm.razorpay_key_id}
-                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_key_id: e.target.value })}
-                      className="rounded-full"
-                      placeholder="rzp_test_..."
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Razorpay Key Secret</Label>
-                    <Input
-                      type="password"
-                      value={businessForm.razorpay_key_secret}
-                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_key_secret: e.target.value })}
-                      className="rounded-full"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Razorpay Webhook Secret</Label>
-                    <Input
-                      type="password"
-                      value={businessForm.razorpay_webhook_secret}
-                      onChange={(e) => setBusinessForm({ ...businessForm, razorpay_webhook_secret: e.target.value })}
-                      className="rounded-full"
-                      placeholder="••••••••"
-                    />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Get your Razorpay API keys from the{' '}
-                    <a href="https://dashboard.razorpay.com/app/keys" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                      Razorpay Dashboard
-                    </a>
-                  </p>
-                </div>
+                <p className="text-sm text-muted-foreground">
+                  Razorpay credentials are securely configured as environment variables and cannot be viewed or edited here for security reasons.
+                  To update payment gateway settings, please contact your administrator.
+                </p>
               </div>
 
               <Button onClick={handleSaveSettings} className="rounded-full" disabled={updateSettings.isPending}>
