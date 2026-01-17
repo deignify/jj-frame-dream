@@ -7,6 +7,7 @@ import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { toast } from 'sonner';
 import ProductQuickView from './ProductQuickView';
+import WishlistButton from './WishlistButton';
 
 interface ProductCardProps {
   product: Product;
@@ -64,6 +65,11 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
               {/* Gradient Overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               
+              {/* Wishlist Button */}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                <WishlistButton productId={product.id} />
+              </div>
+
               {/* Quick View Button */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300">
                 <Button 

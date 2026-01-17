@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Minus, Plus, ShoppingCart, Heart, ChevronLeft, Check, Loader2 } from 'lucide-react';
+import { Minus, Plus, ShoppingCart, ChevronLeft, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Layout from '@/components/Layout';
@@ -10,6 +10,14 @@ import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useCart } from '@/context/CartContext';
 import { toast } from 'sonner';
 import { Helmet } from 'react-helmet-async';
+import WishlistButton from '@/components/WishlistButton';
+import ProductRating from '@/components/ProductRating';
+import ReviewForm from '@/components/ReviewForm';
+import ReviewList from '@/components/ReviewList';
+import RelatedProducts from '@/components/RelatedProducts';
+import RecentlyViewedProducts from '@/components/RecentlyViewedProducts';
+import { useProductReviews, calculateAverageRating } from '@/hooks/useReviews';
+import { useRecentlyViewed } from '@/hooks/useRecentlyViewed';
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -18,11 +26,24 @@ const ProductDetail = () => {
   const { data: product, isLoading } = useProductBySlug(id || '');
   const { data: allProducts } = useProducts();
   const { data: settings } = useBusinessSettings();
+  const { data: reviews } = useProductReviews(product?.id || '');
+  const { addToRecentlyViewed } = useRecentlyViewed();
   const [quantity, setQuantity] = useState(1);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   const currencySymbol = settings?.currency_symbol || '₹';
   const businessName = settings?.business_name || 'JJ Frame Studio';
+  
+  const averageRating = calculateAverageRating(reviews || []);
+  const reviewCount = reviews?.length || 0;
+
+  // Track recently viewed
+  useEffect(() => {
+    if (product?.id) {
+      addToRecentlyViewed(product.id);
+    }
+  }, [product?.id]);
 
   // Get all product images
   const allImages = product ? [product.image, ...(product.images || [])].filter(Boolean) : [];
@@ -162,9 +183,17 @@ const ProductDetail = () => {
               <p className="text-primary font-medium text-sm uppercase tracking-wider mb-2">
                 {product.category}
               </p>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">
                 {product.name}
               </h1>
+              
+              {/* Rating */}
+              {reviewCount > 0 && (
+                <div className="mb-4">
+                  <ProductRating rating={averageRating} reviewCount={reviewCount} size="md" />
+                </div>
+              )}
+              
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-3xl font-bold text-primary">
                   {currencySymbol}{product.price.toLocaleString('en-IN')}
@@ -262,23 +291,33 @@ const ProductDetail = () => {
                   Buy Now
                 </Button>
               </div>
-              <Button size="lg" variant="ghost" className="w-full h-12 rounded-xl">
-                <Heart className="h-5 w-5 mr-2" />
-                Add to Wishlist
-              </Button>
+              <WishlistButton productId={product.id} variant="default" className="w-full h-12" />
             </div>
 
             {/* Tabs */}
             <Tabs defaultValue="description" className="mt-8">
-              <TabsList className="w-full bg-card rounded-full p-1">
+              <TabsList className="w-full bg-card rounded-full p-1 flex-wrap h-auto">
                 <TabsTrigger value="description" className="flex-1 rounded-full">Description</TabsTrigger>
                 <TabsTrigger value="features" className="flex-1 rounded-full">Features</TabsTrigger>
-                <TabsTrigger value="care" className="flex-1 rounded-full">Care</TabsTrigger>
+                <TabsTrigger value="reviews" className="flex-1 rounded-full">Reviews ({reviewCount})</TabsTrigger>
               </TabsList>
               <TabsContent value="description" className="pt-6">
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-muted-foreground leading-relaxed mb-4">
                   {product.description}
                 </p>
+                {product.care_instructions && product.care_instructions.length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-medium text-foreground mb-3">Care Instructions</h4>
+                    <ul className="space-y-2">
+                      {product.care_instructions.map((instruction, index) => (
+                        <li key={index} className="flex items-start gap-2 text-muted-foreground">
+                          <span className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
+                          {instruction}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </TabsContent>
               <TabsContent value="features" className="pt-6">
                 <ul className="space-y-2">
@@ -290,31 +329,48 @@ const ProductDetail = () => {
                   ))}
                 </ul>
               </TabsContent>
-              <TabsContent value="care" className="pt-6">
-                <ul className="space-y-2">
-                  {product.care_instructions?.map((instruction, index) => (
-                    <li key={index} className="flex items-start gap-2 text-muted-foreground">
-                      <span className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
-                      {instruction}
-                    </li>
-                  ))}
-                </ul>
+              <TabsContent value="reviews" className="pt-6">
+                <div className="space-y-6">
+                  {/* Review Summary */}
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl font-bold text-foreground">{averageRating}</span>
+                      <div>
+                        <ProductRating rating={averageRating} showCount={false} size="lg" />
+                        <p className="text-sm text-muted-foreground">{reviewCount} review{reviewCount !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <Button 
+                      className="rounded-full"
+                      onClick={() => setShowReviewForm(!showReviewForm)}
+                    >
+                      {showReviewForm ? 'Cancel' : 'Write a Review'}
+                    </Button>
+                  </div>
+                  
+                  {/* Review Form */}
+                  {showReviewForm && (
+                    <div className="bg-card rounded-2xl p-6">
+                      <h3 className="font-semibold text-foreground mb-4">Write Your Review</h3>
+                      <ReviewForm productId={product.id} onSuccess={() => setShowReviewForm(false)} />
+                    </div>
+                  )}
+                  
+                  {/* Reviews List */}
+                  <ReviewList reviews={reviews || []} />
+                </div>
               </TabsContent>
             </Tabs>
           </div>
         </div>
 
         {/* Related Products */}
-        {relatedProducts.length > 0 && (
-          <section className="mt-16 md:mt-24">
-            <h2 className="text-2xl font-bold text-foreground mb-8">You May Also Like</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {relatedProducts.map(p => (
-                <ProductCard key={p.id} product={p} showActions />
-              ))}
-            </div>
-          </section>
+        {allProducts && (
+          <RelatedProducts currentProduct={product} allProducts={allProducts} />
         )}
+
+        {/* Recently Viewed */}
+        <RecentlyViewedProducts excludeProductId={product.id} />
       </div>
     </Layout>
   );

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,6 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { ImageUpload, MultiImageUpload } from '@/components/ImageUpload';
 import { BulkProductCSV } from '@/components/BulkProductCSV';
 import { toast } from 'sonner';
+import LowStockAlert from '@/components/LowStockAlert';
+import OrderAnalytics from '@/components/OrderAnalytics';
 import {
   Pagination,
   PaginationContent,
