@@ -24,7 +24,7 @@ const categories = [
   { id: "collage", name: "Collage Frames" }
 ];
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 10;
 
 const Products = () => {
   const { data: products, isLoading } = useProducts();
