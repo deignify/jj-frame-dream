@@ -37,16 +37,20 @@ const ProductQuickView = ({ product, open, onOpenChange }: ProductQuickViewProps
     : 0;
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
-    toast.success(`${quantity} × ${product.name} added to cart!`);
-    onOpenChange(false);
-    setQuantity(1);
+    const success = addToCart(product, quantity);
+    if (success) {
+      toast.success(`${quantity} × ${product.name} added to cart!`);
+      onOpenChange(false);
+      setQuantity(1);
+    }
   };
 
   const handleBuyNow = () => {
-    addToCart(product, quantity);
-    onOpenChange(false);
-    navigate('/checkout');
+    const success = addToCart(product, quantity);
+    if (success) {
+      onOpenChange(false);
+      navigate('/checkout');
+    }
   };
 
   const handleViewDetails = () => {

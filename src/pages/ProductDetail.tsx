@@ -53,13 +53,17 @@ const ProductDetail = () => {
   const relatedProducts = allProducts?.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4) || [];
 
   const handleAddToCart = () => {
-    addToCart(product, quantity);
-    toast.success(`${quantity} × ${product.name} added to cart!`);
+    const success = addToCart(product, quantity);
+    if (success) {
+      toast.success(`${quantity} × ${product.name} added to cart!`);
+    }
   };
 
   const handleBuyNow = () => {
-    addToCart(product, quantity);
-    navigate('/checkout');
+    const success = addToCart(product, quantity);
+    if (success) {
+      navigate('/checkout');
+    }
   };
 
   const discount = product.original_price 
