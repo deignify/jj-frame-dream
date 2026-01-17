@@ -42,14 +42,15 @@ export const useCreateOrder = () => {
   
   return useMutation({
     mutationFn: async (order: Omit<Order, 'id' | 'created_at' | 'updated_at'>) => {
-      const { data, error } = await supabase
+      // IMPORTANT: Do not request returned rows here.
+      // Public users can INSERT orders, but they cannot SELECT from the orders table.
+      // If we ask PostgREST to return the inserted row (via .select()), the request fails under RLS.
+      const { error } = await supabase
         .from('orders')
-        .insert(order)
-        .select()
-        .single();
+        .insert([order]);
       
       if (error) throw error;
-      return data;
+      return { order_id: order.order_id };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['orders'] });
