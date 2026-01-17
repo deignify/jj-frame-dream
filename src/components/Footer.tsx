@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from 'lucide-react';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
+import NewsletterSignup from './NewsletterSignup';
 
 const Footer = () => {
   const { data: settings } = useBusinessSettings();
@@ -121,7 +122,16 @@ const Footer = () => {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-border text-center">
+        {/* Newsletter Section */}
+        <div className="mt-8 pt-8 border-t border-border">
+          <div className="max-w-md mx-auto text-center">
+            <h4 className="font-semibold text-foreground mb-2">Subscribe to Our Newsletter</h4>
+            <p className="text-sm text-muted-foreground mb-4">Get updates on new frames, special offers, and styling tips.</p>
+            <NewsletterSignup variant="inline" />
+          </div>
+        </div>
+
+        <div className="mt-8 pt-8 border-t border-border text-center">
           <p className="text-muted-foreground text-sm">
             © {new Date().getFullYear()} {businessName}. All rights reserved.
           </p>
