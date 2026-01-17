@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, CreditCard, Truck, User, MapPin, Loader2 } from 'lucide-react';
+import { ChevronRight, CreditCard, Truck, User, MapPin, Loader2, Tag, X, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,6 +9,7 @@ import Layout from '@/components/Layout';
 import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useCreateOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { useValidatePromoCode, useIncrementPromoCodeUsage } from '@/hooks/usePromoCodes';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -18,16 +19,30 @@ declare global {
   }
 }
 
+interface AppliedPromo {
+  code: string;
+  discount_type: 'percentage' | 'fixed';
+  discount_value: number;
+  discountAmount: number;
+}
+
 const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, clearCart } = useCart();
   const { data: settings } = useBusinessSettings();
   const createOrder = useCreateOrder();
   const updateOrderStatus = useUpdateOrderStatus();
+  const validatePromoCode = useValidatePromoCode();
+  const incrementPromoCodeUsage = useIncrementPromoCodeUsage();
   const [step, setStep] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  
+  // Promo code state
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const currencySymbol = settings?.currency_symbol || '₹';
   const taxRate = parseFloat(settings?.tax_rate || '18') / 100;
@@ -61,13 +76,58 @@ const Checkout = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  // Handle promo code validation
+  const handleApplyPromo = async () => {
+    if (!promoCode.trim()) {
+      toast.error('Please enter a promo code');
+      return;
+    }
+
+    setIsValidatingPromo(true);
+    try {
+      const result = await validatePromoCode.mutateAsync({
+        code: promoCode.trim().toUpperCase(),
+        orderAmount: totalPrice
+      });
+      
+      // Calculate discount amount
+      let discountAmount = 0;
+      if (result.discount_type === 'percentage') {
+        discountAmount = Math.round((totalPrice * result.discount_value) / 100);
+      } else {
+        discountAmount = result.discount_value;
+      }
+      
+      setAppliedPromo({
+        code: result.code,
+        discount_type: result.discount_type as 'percentage' | 'fixed',
+        discount_value: result.discount_value,
+        discountAmount
+      });
+      
+      toast.success(`Promo code applied! You save ${currencySymbol}${discountAmount.toLocaleString('en-IN')}`);
+    } catch (error: any) {
+      toast.error(error.message || 'Invalid promo code');
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode('');
+    toast.info('Promo code removed');
+  };
+
   const handleCODOrder = async () => {
     setIsSubmitting(true);
     
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const subtotal = totalPrice;
-    const tax = Math.round(subtotal * taxRate);
-    const total = subtotal + tax;
+    const discount = appliedPromo?.discountAmount || 0;
+    const discountedSubtotal = subtotal - discount;
+    const tax = Math.round(discountedSubtotal * taxRate);
+    const total = discountedSubtotal + tax;
     
     try {
       await createOrder.mutateAsync({
@@ -85,12 +145,17 @@ const Checkout = () => {
           price: item.product.price,
           quantity: item.quantity
         })),
-        subtotal,
+        subtotal: discountedSubtotal,
         tax,
         total,
         payment_method: 'cod',
         status: 'pending'
       });
+
+      // Increment promo code usage if applied
+      if (appliedPromo) {
+        await incrementPromoCodeUsage.mutateAsync(appliedPromo.code);
+      }
 
       clearCart();
       navigate('/order-confirmation', { state: { orderId, total } });
@@ -112,8 +177,10 @@ const Checkout = () => {
     
     const orderId = 'JJF-' + Math.random().toString(36).substring(2, 10).toUpperCase();
     const subtotal = totalPrice;
-    const tax = Math.round(subtotal * taxRate);
-    const total = subtotal + tax;
+    const discount = appliedPromo?.discountAmount || 0;
+    const discountedSubtotal = subtotal - discount;
+    const tax = Math.round(discountedSubtotal * taxRate);
+    const total = discountedSubtotal + tax;
     
     try {
       // Create Razorpay order via edge function FIRST (before creating DB order)
@@ -147,7 +214,7 @@ const Checkout = () => {
           price: item.product.price,
           quantity: item.quantity
         })),
-        subtotal,
+        subtotal: discountedSubtotal,
         tax,
         total,
         payment_method: 'razorpay'
@@ -181,6 +248,11 @@ const Checkout = () => {
               ...orderPayload,
               status: 'processing' // Order is confirmed since payment succeeded
             });
+            
+            // Increment promo code usage if applied
+            if (appliedPromo) {
+              await incrementPromoCodeUsage.mutateAsync(appliedPromo.code);
+            }
             
             clearCart();
             toast.success('Payment successful! Order placed.');
@@ -240,8 +312,10 @@ const Checkout = () => {
   ];
 
   const subtotal = totalPrice;
-  const tax = Math.round(subtotal * taxRate);
-  const total = subtotal + tax;
+  const discount = appliedPromo?.discountAmount || 0;
+  const discountedSubtotal = subtotal - discount;
+  const tax = Math.round(discountedSubtotal * taxRate);
+  const total = discountedSubtotal + tax;
 
   return (
     <Layout>
@@ -531,11 +605,68 @@ const Checkout = () => {
                 ))}
               </div>
 
+              {/* Promo Code Section */}
+              <div className="border-t border-border pt-4 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Tag className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-foreground text-sm">Promo Code</span>
+                </div>
+                
+                {appliedPromo ? (
+                  <div className="flex items-center justify-between bg-primary/10 border border-primary/20 rounded-xl p-3">
+                    <div className="flex items-center gap-2">
+                      <Check className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-primary text-sm">{appliedPromo.code}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({appliedPromo.discount_type === 'percentage' 
+                          ? `${appliedPromo.discount_value}% off` 
+                          : `${currencySymbol}${appliedPromo.discount_value} off`})
+                      </span>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6" 
+                      onClick={handleRemovePromo}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter code"
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                      className="rounded-xl flex-1"
+                    />
+                    <Button 
+                      variant="outline" 
+                      onClick={handleApplyPromo}
+                      disabled={isValidatingPromo || !promoCode.trim()}
+                      className="rounded-xl"
+                    >
+                      {isValidatingPromo ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        'Apply'
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <div className="border-t border-border pt-4 space-y-2">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
                   <span>{currencySymbol}{subtotal.toLocaleString('en-IN')}</span>
                 </div>
+                {appliedPromo && (
+                  <div className="flex justify-between text-primary">
+                    <span>Discount ({appliedPromo.code})</span>
+                    <span>-{currencySymbol}{discount.toLocaleString('en-IN')}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-muted-foreground">
                   <span>Shipping</span>
                   <span className="text-primary font-medium">Free</span>

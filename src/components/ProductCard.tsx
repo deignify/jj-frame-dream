@@ -46,10 +46,10 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
 
   return (
     <>
-      <div className="group flex flex-col h-full">
-        <Link to={`/product/${product.slug || product.id}`} className="flex-1 flex flex-col">
-          <div className="bg-card rounded-2xl overflow-hidden border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-300 flex-1 flex flex-col">
-            {/* Image Container */}
+      <div className="group h-full">
+        <div className="bg-card rounded-2xl overflow-hidden border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-300 h-full flex flex-col">
+          {/* Image Container */}
+          <Link to={`/product/${product.slug || product.id}`}>
             <div className="relative aspect-[4/3] overflow-hidden bg-muted/30">
               <img
                 src={product.image}
@@ -86,55 +86,55 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
                 </span>
               )}
             </div>
+          </Link>
 
-            {/* Content */}
-            <div className="p-4 flex-1 flex flex-col">
+          {/* Content */}
+          <div className="p-4 flex-1 flex flex-col">
+            <Link to={`/product/${product.slug || product.id}`}>
               <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mb-1.5">
                 {product.category}
               </p>
-              <h3 className="font-semibold text-foreground text-sm leading-snug mb-3 group-hover:text-primary transition-colors line-clamp-2 flex-1">
+              <h3 className="font-semibold text-foreground text-sm leading-snug mb-3 group-hover:text-primary transition-colors line-clamp-2">
                 {product.name}
               </h3>
-              <div className="flex items-baseline gap-2 mt-auto">
-                <span className="text-lg font-bold text-primary">
-                  {currencySymbol}{product.price.toLocaleString('en-IN')}
+            </Link>
+            <div className="flex items-baseline gap-2 mt-auto">
+              <span className="text-lg font-bold text-primary">
+                {currencySymbol}{product.price.toLocaleString('en-IN')}
+              </span>
+              {product.original_price && (
+                <span className="text-xs text-muted-foreground line-through">
+                  {currencySymbol}{product.original_price.toLocaleString('en-IN')}
                 </span>
-                {product.original_price && (
-                  <span className="text-xs text-muted-foreground line-through">
-                    {currencySymbol}{product.original_price.toLocaleString('en-IN')}
-                  </span>
-                )}
+              )}
+            </div>
+          </div>
+          
+          {/* Action Buttons - inside the card */}
+          {showActions && (
+            <div className="p-4 pt-0">
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={handleAddToCart}
+                  variant="outline"
+                  className="w-full rounded-xl h-10 text-sm font-medium border-border hover:border-primary hover:bg-primary/5"
+                  disabled={!product.in_stock}
+                >
+                  <ShoppingCart className="h-4 w-4 mr-2 flex-shrink-0" />
+                  Add to Cart
+                </Button>
+                <Button 
+                  onClick={handleBuyNow}
+                  className="w-full rounded-xl h-10 text-sm font-medium shadow-sm hover:shadow-md transition-shadow"
+                  disabled={!product.in_stock}
+                >
+                  <ShoppingBag className="h-4 w-4 mr-2 flex-shrink-0" />
+                  Buy Now
+                </Button>
               </div>
             </div>
-          </div>
-        </Link>
-        
-        {/* Action Buttons - in a box */}
-        {showActions && (
-          <div className="mt-3 bg-muted/50 rounded-xl p-2">
-            <div className="flex flex-col gap-1.5">
-              <Button 
-                onClick={handleAddToCart}
-                variant="outline"
-                className="w-full rounded-lg h-9 text-[11px] font-medium border-border/80 hover:border-primary hover:bg-primary/5 px-2"
-                size="sm"
-                disabled={!product.in_stock}
-              >
-                <ShoppingCart className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                <span className="truncate">Add to Cart</span>
-              </Button>
-              <Button 
-                onClick={handleBuyNow}
-                className="w-full rounded-lg h-9 text-[11px] font-medium shadow-sm hover:shadow-md transition-shadow px-2"
-                size="sm"
-                disabled={!product.in_stock}
-              >
-                <ShoppingBag className="h-3.5 w-3.5 mr-1 flex-shrink-0" />
-                <span className="truncate">Buy Now</span>
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Quick View Modal */}
