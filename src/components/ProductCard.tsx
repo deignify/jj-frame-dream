@@ -55,11 +55,12 @@ const ProductCard = ({ product, showActions = false }: ProductCardProps) => {
         <div className="bg-card rounded-2xl overflow-hidden border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-300 h-full flex flex-col">
           {/* Image Container */}
           <Link to={`/product/${product.slug || product.id}`}>
-            <div className="relative aspect-[4/3] overflow-hidden bg-muted/30">
+            <div className="relative aspect-square overflow-hidden bg-muted/30">
               <img
                 src={product.image}
                 alt={product.name}
-                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
+                loading="lazy"
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 ease-out"
               />
               
               {/* Gradient Overlay */}
