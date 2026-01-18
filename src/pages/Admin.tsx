@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +19,7 @@ import { BulkProductCSV } from '@/components/BulkProductCSV';
 import { toast } from 'sonner';
 import LowStockAlert from '@/components/LowStockAlert';
 import OrderAnalytics from '@/components/OrderAnalytics';
+import { useInquiries, useUpdateInquiry, useDeleteInquiry } from '@/hooks/useInquiries';
 import {
   Pagination,
   PaginationContent,
@@ -64,6 +65,9 @@ const Admin = () => {
   const { data: orders, isLoading: ordersLoading } = useOrders();
   const { data: settings, isLoading: settingsLoading } = useBusinessSettings();
   const { data: promoCodes, isLoading: promoCodesLoading } = usePromoCodes();
+  const { data: inquiries, isLoading: inquiriesLoading } = useInquiries();
+  const updateInquiry = useUpdateInquiry();
+  const deleteInquiry = useDeleteInquiry();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
@@ -462,6 +466,14 @@ const Admin = () => {
             <TabsTrigger value="settings" className="rounded-full gap-2">
               <Settings className="h-4 w-4" />
               Settings
+            </TabsTrigger>
+            <TabsTrigger value="inquiries" className="rounded-full gap-2">
+              <MessageSquare className="h-4 w-4" />
+              Inquiries {inquiries && inquiries.filter(i => i.status === 'pending').length > 0 && (
+                <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full ml-1">
+                  {inquiries.filter(i => i.status === 'pending').length}
+                </span>
+              )}
             </TabsTrigger>
           </TabsList>
 
@@ -949,6 +961,97 @@ const Admin = () => {
                 <Save className="h-4 w-4 mr-2" />
                 {updateSettings.isPending ? 'Saving...' : 'Save All Settings'}
               </Button>
+            </div>
+          </TabsContent>
+
+          {/* Inquiries Tab */}
+          <TabsContent value="inquiries">
+            <div className="bg-card rounded-3xl p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+                <h2 className="text-xl font-bold text-foreground">Contact Inquiries ({inquiries?.length || 0})</h2>
+              </div>
+
+              {inquiriesLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : inquiries && inquiries.length > 0 ? (
+                <div className="space-y-4">
+                  {inquiries.map((inquiry) => (
+                    <div key={inquiry.id} className="bg-accent/30 rounded-2xl p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                            inquiry.status === 'resolved' ? 'bg-green-100 text-green-700' :
+                            inquiry.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {inquiry.status.replace('_', ' ')}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(inquiry.created_at).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Select
+                            value={inquiry.status}
+                            onValueChange={(value) => updateInquiry.mutate({ id: inquiry.id, status: value })}
+                          >
+                            <SelectTrigger className="w-32 rounded-full h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="resolved">Resolved</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Delete this inquiry?')) {
+                                deleteInquiry.mutate(inquiry.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <h3 className="font-semibold text-foreground">{inquiry.subject}</h3>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">{inquiry.message}</p>
+                      </div>
+                      
+                      <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="h-4 w-4 text-primary" />
+                          <span className="text-foreground font-medium">{inquiry.name}</span>
+                        </div>
+                        <a href={`mailto:${inquiry.email}`} className="flex items-center gap-2 text-sm text-primary hover:underline">
+                          <Mail className="h-4 w-4" />
+                          {inquiry.email}
+                        </a>
+                      </div>
+                      
+                      {inquiry.admin_notes && (
+                        <div className="bg-accent/50 rounded-xl p-3 mt-2">
+                          <p className="text-xs text-muted-foreground font-medium mb-1">Admin Notes:</p>
+                          <p className="text-sm text-foreground">{inquiry.admin_notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <MessageSquare className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
+                  <p className="text-muted-foreground">No inquiries yet</p>
+                </div>
+              )}
             </div>
           </TabsContent>
         </Tabs>

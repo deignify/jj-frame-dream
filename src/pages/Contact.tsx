@@ -1,11 +1,11 @@
-import { Mail, Phone, MapPin, Clock, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Clock, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import Layout from '@/components/Layout';
-import { toast } from 'sonner';
 import { useState } from 'react';
+import { useSubmitInquiry } from '@/hooks/useInquiries';
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -14,10 +14,12 @@ const Contact = () => {
     subject: '',
     message: ''
   });
+  
+  const submitInquiry = useSubmitInquiry();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success('Message sent! We\'ll get back to you soon.');
+    await submitInquiry.mutateAsync(formData);
     setFormData({ name: '', email: '', subject: '', message: '' });
   };
 
@@ -150,9 +152,13 @@ const Contact = () => {
                     />
                   </div>
 
-                  <Button type="submit" className="rounded-full px-8">
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Message
+                  <Button type="submit" className="rounded-full px-8" disabled={submitInquiry.isPending}>
+                    {submitInquiry.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    {submitInquiry.isPending ? 'Sending...' : 'Send Message'}
                   </Button>
                 </form>
               </div>
