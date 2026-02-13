@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,38 +31,24 @@ interface Order {
 }
 
 const TrackOrder = () => {
-  const [orderId, setOrderId] = useState('');
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  const [orderId, setOrderId] = useState(searchParams.get('orderId') || '');
+  const [email, setEmail] = useState(searchParams.get('email') || '');
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!orderId.trim() || !email.trim()) {
-      toast.error('Please enter both Order ID and Email');
-      return;
-    }
-
+  const doSearch = async (oid: string, em: string) => {
+    if (!oid.trim() || !em.trim()) return;
     setLoading(true);
     setSearched(true);
-
     try {
-      // Use secure edge function to lookup order (bypasses RLS safely)
       const { data: response, error } = await supabase.functions.invoke('lookup-order', {
-        body: {
-          orderId: orderId.trim(),
-          email: email.trim().toLowerCase()
-        }
+        body: { orderId: oid.trim(), email: em.trim().toLowerCase() }
       });
-
       if (error) throw error;
-
       if (response?.order) {
-        setOrder({
-          ...response.order,
-          items: response.order.items as unknown as OrderItem[]
-        } as Order);
+        setOrder({ ...response.order, items: response.order.items as unknown as OrderItem[] } as Order);
       } else {
         setOrder(null);
         toast.error('Order not found. Please check your details.');
@@ -73,6 +60,24 @@ const TrackOrder = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Auto-search if URL params provided
+  useEffect(() => {
+    const paramOrderId = searchParams.get('orderId');
+    const paramEmail = searchParams.get('email');
+    if (paramOrderId && paramEmail) {
+      doSearch(paramOrderId, paramEmail);
+    }
+  }, []);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!orderId.trim() || !email.trim()) {
+      toast.error('Please enter both Order ID and Email');
+      return;
+    }
+    doSearch(orderId, email);
   };
 
   const getStatusStep = (status: string) => {

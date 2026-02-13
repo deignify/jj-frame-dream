@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { CheckCircle, Package, MapPin, Truck, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -7,7 +7,8 @@ import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 const OrderConfirmation = () => {
   const location = useLocation();
   const { data: settings } = useBusinessSettings();
-  const { orderId, total, paymentId } = location.state || { orderId: 'JJF-XXXXXXXX', total: 0 };
+  const navigate = useNavigate();
+  const { orderId, total, paymentId, email } = location.state || { orderId: 'JJF-XXXXXXXX', total: 0 };
   const currencySymbol = settings?.currency_symbol || '₹';
 
   return (
@@ -82,7 +83,7 @@ const OrderConfirmation = () => {
             Need help?{' '}
             <Link to="/contact" className="text-primary hover:underline">Contact us</Link>
             {' '}or{' '}
-            <Link to="/track-order" className="text-primary hover:underline">track your order</Link>.
+            <Link to={`/track-order?orderId=${encodeURIComponent(orderId)}${email ? `&email=${encodeURIComponent(email)}` : ''}`} className="text-primary hover:underline">track your order</Link>.
           </p>
 
           <Separator className="mb-8" />
