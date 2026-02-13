@@ -180,7 +180,7 @@ const Checkout = () => {
       await sendOrderConfirmationEmail({ orderId, subtotal: discountedSubtotal, tax, shipping: actualDeliveryCharge, discount, total, paymentMethod: 'cod' });
       if (appliedPromo) { await incrementPromoCodeUsage.mutateAsync(appliedPromo.code); localStorage.removeItem('appliedPromo'); }
       clearCart();
-      navigate('/order-confirmation', { state: { orderId, total } });
+      navigate('/order-confirmation', { state: { orderId, total, email: formData.email } });
     } catch (error) { console.error('Order creation failed:', error); toast.error('Failed to place order. Please try again.'); }
     finally { setIsSubmitting(false); }
   };
@@ -230,7 +230,7 @@ const Checkout = () => {
             await sendOrderConfirmationEmail({ orderId, subtotal: discountedSubtotal, tax, shipping: actualDeliveryCharge, discount, total, paymentMethod: 'razorpay' });
             if (appliedPromo) { await incrementPromoCodeUsage.mutateAsync(appliedPromo.code); localStorage.removeItem('appliedPromo'); }
             clearCart(); toast.success('Payment successful! Order placed.');
-            navigate('/order-confirmation', { state: { orderId, total, paymentId: response.razorpay_payment_id } });
+            navigate('/order-confirmation', { state: { orderId, total, paymentId: response.razorpay_payment_id, email: formData.email } });
           } catch (err) { toast.error('Payment received but order creation failed. Please contact support.'); setIsSubmitting(false); }
         },
         modal: { ondismiss: function() { setIsSubmitting(false); toast.info('Payment cancelled.'); } }
