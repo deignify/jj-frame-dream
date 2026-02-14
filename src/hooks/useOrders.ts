@@ -18,6 +18,7 @@ export interface Order {
   total: number;
   payment_method: string;
   status: string;
+  user_id?: string | null;
   created_at: string;
   updated_at: string;
 }
