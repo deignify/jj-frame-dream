@@ -35,13 +35,26 @@ const Account = () => {
   const { data: orders, isLoading: ordersLoading } = useQuery({
     queryKey: ['user-orders', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch orders by user_id OR by matching email (for old orders placed before account linking)
+      const { data: byUserId, error: err1 } = await supabase
         .from('orders')
         .select('*')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
+      
+      const { data: byEmail, error: err2 } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_email', user!.email!)
+        .order('created_at', { ascending: false });
+
+      if (err1 && err2) throw err1;
+      
+      // Merge and deduplicate by order id
+      const allOrders = [...(byUserId || []), ...(byEmail || [])];
+      const unique = Array.from(new Map(allOrders.map(o => [o.id, o])).values());
+      unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return unique;
     },
     enabled: !!user,
   });
