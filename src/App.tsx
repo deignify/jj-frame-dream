@@ -14,6 +14,7 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Admin from "./pages/Admin";
 import Auth from "./pages/Auth";
+import Account from "./pages/Account";
 import FAQ from "./pages/FAQ";
 import ShippingInfo from "./pages/ShippingInfo";
 import Returns from "./pages/Returns";
@@ -43,6 +44,7 @@ const App = () => (
             <Route path="/contact" element={<Contact />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/faq" element={<FAQ />} />
             <Route path="/shipping-info" element={<ShippingInfo />} />
             <Route path="/returns" element={<Returns />} />

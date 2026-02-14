@@ -10,6 +10,7 @@ import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useCreateOrder, useUpdateOrderStatus } from '@/hooks/useOrders';
 import { useValidatePromoCode, useIncrementPromoCodeUsage } from '@/hooks/usePromoCodes';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -35,6 +36,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { items, totalPrice, clearCart, refreshProductStock } = useCart();
   const { data: settings } = useBusinessSettings();
+  const { user } = useAuth();
   const createOrder = useCreateOrder();
   const updateOrderStatus = useUpdateOrderStatus();
   const validatePromoCode = useValidatePromoCode();
@@ -175,7 +177,8 @@ const Checkout = () => {
         shipping_address: formData.address, shipping_city: formData.city,
         shipping_state: formData.state, shipping_zip: formData.zip,
         items: items.map(item => ({ product_id: item.product.id, name: item.product.name, price: item.product.price, quantity: item.quantity })),
-        subtotal: discountedSubtotal, tax, total, payment_method: 'cod', status: 'pending'
+        subtotal: discountedSubtotal, tax, total, payment_method: 'cod', status: 'pending',
+        user_id: user?.id || null
       });
       await sendOrderConfirmationEmail({ orderId, subtotal: discountedSubtotal, tax, shipping: actualDeliveryCharge, discount, total, paymentMethod: 'cod' });
       if (appliedPromo) { await incrementPromoCodeUsage.mutateAsync(appliedPromo.code); localStorage.removeItem('appliedPromo'); }
@@ -214,7 +217,8 @@ const Checkout = () => {
         shipping_address: formData.address, shipping_city: formData.city,
         shipping_state: formData.state, shipping_zip: formData.zip,
         items: items.map(item => ({ id: item.product.id, name: item.product.name, price: item.product.price, quantity: item.quantity })),
-        subtotal: discountedSubtotal, tax, total, payment_method: 'razorpay'
+        subtotal: discountedSubtotal, tax, total, payment_method: 'razorpay',
+        user_id: user?.id || null
       };
 
       const options = {

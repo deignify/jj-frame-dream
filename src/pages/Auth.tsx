@@ -18,7 +18,7 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/account');
     }
   }, [user, navigate]);
 
@@ -37,7 +37,7 @@ const Auth = () => {
           }
         } else {
           toast.success('Logged in successfully!');
-          navigate('/');
+          navigate('/account');
         }
       } else {
         const { error } = await signUp(email, password);

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, Menu, X, User, LogOut, Settings } from 'lucide-react';
+import { ShoppingCart, Menu, X, User, LogOut, Settings, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
@@ -92,6 +92,12 @@ const Header = () => {
                       </Link>
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuItem asChild>
+                    <Link to="/account" className="flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      My Orders
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleSignOut} className="flex items-center gap-2 text-destructive">
                     <LogOut className="h-4 w-4" />
                     Sign Out
