@@ -1,13 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User, MapPin, Heart, Lock, Plus, Pencil, Trash2, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
-import { useQuery } from '@tanstack/react-query';
+import { useWishlist } from '@/hooks/useWishlist';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
@@ -24,6 +28,7 @@ const Account = () => {
   const { user, loading, signOut } = useAuth();
   const { data: settings } = useBusinessSettings();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currencySymbol = settings?.currency_symbol || '₹';
 
   useEffect(() => {
@@ -32,10 +37,10 @@ const Account = () => {
     }
   }, [user, loading, navigate]);
 
+  // --- Orders ---
   const { data: orders, isLoading: ordersLoading } = useQuery({
     queryKey: ['user-orders', user?.id],
     queryFn: async () => {
-      // Fetch orders by user_id OR by matching email (for old orders placed before account linking)
       const { data: byUserId, error: err1 } = await supabase
         .from('orders')
         .select('*')
@@ -50,13 +55,122 @@ const Account = () => {
 
       if (err1 && err2) throw err1;
       
-      // Merge and deduplicate by order id
       const allOrders = [...(byUserId || []), ...(byEmail || [])];
       const unique = Array.from(new Map(allOrders.map(o => [o.id, o])).values());
       unique.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       return unique;
     },
     enabled: !!user,
+  });
+
+  // --- Profile ---
+  const { data: profile } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user!.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const [profileName, setProfileName] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  useEffect(() => {
+    if (profile) {
+      setProfileName(profile.full_name || '');
+      setProfilePhone(profile.phone || '');
+    }
+  }, [profile]);
+
+  const saveProfileMutation = useMutation({
+    mutationFn: async () => {
+      const payload = { user_id: user!.id, full_name: profileName, phone: profilePhone };
+      if (profile) {
+        const { error } = await supabase.from('profiles').update(payload).eq('user_id', user!.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('profiles').insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['profile'] }); toast.success('Profile updated!'); },
+    onError: (e) => toast.error('Failed: ' + e.message),
+  });
+
+  // --- Addresses ---
+  const { data: addresses } = useQuery({
+    queryKey: ['addresses', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('addresses').select('*').eq('user_id', user!.id).order('is_default', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const [showAddressForm, setShowAddressForm] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<any>(null);
+  const [addrForm, setAddrForm] = useState({ label: 'Home', full_name: '', phone: '', address_line: '', city: '', state: '', zip: '', is_default: false });
+
+  const resetAddrForm = () => {
+    setAddrForm({ label: 'Home', full_name: '', phone: '', address_line: '', city: '', state: '', zip: '', is_default: false });
+    setEditingAddress(null);
+    setShowAddressForm(false);
+  };
+
+  const saveAddressMutation = useMutation({
+    mutationFn: async () => {
+      const payload = { ...addrForm, user_id: user!.id };
+      if (editingAddress) {
+        const { error } = await supabase.from('addresses').update(payload).eq('id', editingAddress.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('addresses').insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['addresses'] }); toast.success('Address saved!'); resetAddrForm(); },
+    onError: (e) => toast.error('Failed: ' + e.message),
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('addresses').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['addresses'] }); toast.success('Address deleted'); },
+  });
+
+  // --- Change Password ---
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      if (newPassword.length < 6) throw new Error('Password must be at least 6 characters');
+      if (newPassword !== confirmPassword) throw new Error('Passwords do not match');
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+    },
+    onSuccess: () => { setNewPassword(''); setConfirmPassword(''); toast.success('Password updated!'); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // --- Wishlist ---
+  const { wishlistProductIds, removeFromWishlist } = useWishlist();
+  const { data: wishlistProducts } = useQuery({
+    queryKey: ['wishlist-products', wishlistProductIds],
+    queryFn: async () => {
+      if (!wishlistProductIds.length) return [];
+      const { data, error } = await supabase.from('products').select('*').in('id', wishlistProductIds);
+      if (error) throw error;
+      return data;
+    },
+    enabled: wishlistProductIds.length > 0,
   });
 
   const handleSignOut = async () => {
@@ -84,13 +198,13 @@ const Account = () => {
     <Layout>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Profile Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
               <User className="h-7 w-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">My Account</h1>
+              <h1 className="text-2xl font-bold text-foreground">{profile?.full_name || 'My Account'}</h1>
               <p className="text-muted-foreground text-sm">{user.email}</p>
             </div>
           </div>
@@ -100,97 +214,224 @@ const Account = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-foreground">{totalOrders}</p>
-              <p className="text-sm text-muted-foreground">Total Orders</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 text-center">
-              <p className="text-2xl font-bold text-foreground">{currencySymbol}{totalSpent.toLocaleString('en-IN')}</p>
-              <p className="text-sm text-muted-foreground">Total Spent</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-foreground">{totalOrders}</p><p className="text-xs text-muted-foreground">Orders</p></CardContent></Card>
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-foreground">{currencySymbol}{totalSpent.toLocaleString('en-IN')}</p><p className="text-xs text-muted-foreground">Spent</p></CardContent></Card>
+          <Card><CardContent className="p-4 text-center"><p className="text-2xl font-bold text-foreground">{wishlistProductIds.length}</p><p className="text-xs text-muted-foreground">Wishlist</p></CardContent></Card>
         </div>
 
-        {/* Order History */}
-        <h2 className="text-xl font-semibold text-foreground mb-4">Order History</h2>
+        {/* Tabs */}
+        <Tabs defaultValue="orders" className="w-full">
+          <TabsList className="w-full grid grid-cols-4 mb-4">
+            <TabsTrigger value="orders" className="gap-1 text-xs sm:text-sm"><Package className="h-3.5 w-3.5 hidden sm:block" /> Orders</TabsTrigger>
+            <TabsTrigger value="profile" className="gap-1 text-xs sm:text-sm"><User className="h-3.5 w-3.5 hidden sm:block" /> Profile</TabsTrigger>
+            <TabsTrigger value="addresses" className="gap-1 text-xs sm:text-sm"><MapPin className="h-3.5 w-3.5 hidden sm:block" /> Addresses</TabsTrigger>
+            <TabsTrigger value="wishlist" className="gap-1 text-xs sm:text-sm"><Heart className="h-3.5 w-3.5 hidden sm:block" /> Wishlist</TabsTrigger>
+          </TabsList>
 
-        {ordersLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6"><div className="h-16 bg-muted rounded" /></CardContent>
+          {/* ORDERS TAB */}
+          <TabsContent value="orders">
+            {ordersLoading ? (
+              <div className="space-y-4">{[1, 2, 3].map(i => <Card key={i} className="animate-pulse"><CardContent className="p-6"><div className="h-16 bg-muted rounded" /></CardContent></Card>)}</div>
+            ) : !orders || orders.length === 0 ? (
+              <Card><CardContent className="p-12 text-center">
+                <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No orders yet</h3>
+                <p className="text-muted-foreground mb-4">Start shopping to see your orders here.</p>
+                <Button asChild><Link to="/products">Browse Products</Link></Button>
+              </CardContent></Card>
+            ) : (
+              <div className="space-y-4">
+                {orders.map((order) => {
+                  const config = statusConfig[order.status] || statusConfig.pending;
+                  const StatusIcon = config.icon;
+                  const orderItems = Array.isArray(order.items) ? order.items : [];
+                  return (
+                    <Card key={order.id}>
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-foreground">{order.order_id}</span>
+                              <Badge variant={config.variant} className="gap-1"><StatusIcon className="h-3 w-3" />{config.label}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-foreground">{currencySymbol}{Number(order.total).toLocaleString('en-IN')}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}</p>
+                          </div>
+                        </div>
+                        <Separator className="my-3" />
+                        <div className="space-y-2">
+                          {orderItems.slice(0, 3).map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">{item.name} × {item.quantity}</span>
+                              <span className="text-foreground">{currencySymbol}{(item.price * item.quantity).toLocaleString('en-IN')}</span>
+                            </div>
+                          ))}
+                          {orderItems.length > 3 && <p className="text-xs text-muted-foreground">+{orderItems.length - 3} more items</p>}
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <Button variant="ghost" size="sm" asChild className="gap-1 text-primary">
+                            <Link to={`/track-order?orderId=${order.order_id}&email=${order.customer_email}`}><Eye className="h-3.5 w-3.5" /> Track Order</Link>
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* PROFILE TAB */}
+          <TabsContent value="profile">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Edit Profile</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>Email</Label>
+                  <Input value={user.email || ''} disabled className="mt-1" />
+                </div>
+                <div>
+                  <Label>Full Name</Label>
+                  <Input value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Enter your full name" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={profilePhone} onChange={e => setProfilePhone(e.target.value)} placeholder="Enter phone number" className="mt-1" />
+                </div>
+                <Button onClick={() => saveProfileMutation.mutate()} disabled={saveProfileMutation.isPending}>
+                  {saveProfileMutation.isPending ? 'Saving...' : 'Save Profile'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="mt-4">
+              <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lock className="h-4 w-4" /> Change Password</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label>New Password</Label>
+                  <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" className="mt-1" />
+                </div>
+                <div>
+                  <Label>Confirm Password</Label>
+                  <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" className="mt-1" />
+                </div>
+                <Button onClick={() => changePasswordMutation.mutate()} disabled={changePasswordMutation.isPending}>
+                  {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ADDRESSES TAB */}
+          <TabsContent value="addresses">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-semibold text-foreground">Saved Addresses</h3>
+              <Button size="sm" onClick={() => { resetAddrForm(); setShowAddressForm(true); }} className="gap-1"><Plus className="h-4 w-4" /> Add Address</Button>
+            </div>
+
+            {showAddressForm && (
+              <Card className="mb-4">
+                <CardContent className="p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label>Label</Label><Input value={addrForm.label} onChange={e => setAddrForm(p => ({ ...p, label: e.target.value }))} placeholder="e.g. Home, Office" className="mt-1" /></div>
+                    <div><Label>Full Name</Label><Input value={addrForm.full_name} onChange={e => setAddrForm(p => ({ ...p, full_name: e.target.value }))} className="mt-1" /></div>
+                  </div>
+                  <div><Label>Phone</Label><Input value={addrForm.phone} onChange={e => setAddrForm(p => ({ ...p, phone: e.target.value }))} className="mt-1" /></div>
+                  <div><Label>Address</Label><Input value={addrForm.address_line} onChange={e => setAddrForm(p => ({ ...p, address_line: e.target.value }))} className="mt-1" /></div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><Label>City</Label><Input value={addrForm.city} onChange={e => setAddrForm(p => ({ ...p, city: e.target.value }))} className="mt-1" /></div>
+                    <div><Label>State</Label><Input value={addrForm.state} onChange={e => setAddrForm(p => ({ ...p, state: e.target.value }))} className="mt-1" /></div>
+                    <div><Label>ZIP</Label><Input value={addrForm.zip} onChange={e => setAddrForm(p => ({ ...p, zip: e.target.value }))} className="mt-1" /></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" checked={addrForm.is_default} onChange={e => setAddrForm(p => ({ ...p, is_default: e.target.checked }))} className="rounded" />
+                    <Label className="cursor-pointer">Set as default</Label>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={() => saveAddressMutation.mutate()} disabled={saveAddressMutation.isPending}>
+                      {saveAddressMutation.isPending ? 'Saving...' : 'Save Address'}
+                    </Button>
+                    <Button variant="outline" onClick={resetAddrForm}>Cancel</Button>
+                  </div>
+                </CardContent>
               </Card>
-            ))}
-          </div>
-        ) : !orders || orders.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">No orders yet</h3>
-              <p className="text-muted-foreground mb-4">Start shopping to see your orders here.</p>
-              <Button asChild><Link to="/products">Browse Products</Link></Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {orders.map((order) => {
-              const config = statusConfig[order.status] || statusConfig.pending;
-              const StatusIcon = config.icon;
-              const orderItems = Array.isArray(order.items) ? order.items : [];
-              
-              return (
-                <Card key={order.id}>
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-foreground">{order.order_id}</span>
-                          <Badge variant={config.variant} className="gap-1">
-                            <StatusIcon className="h-3 w-3" />
-                            {config.label}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-foreground">{currencySymbol}{Number(order.total).toLocaleString('en-IN')}</p>
-                        <p className="text-xs text-muted-foreground capitalize">{order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}</p>
-                      </div>
-                    </div>
-                    
-                    <Separator className="my-3" />
-                    
-                    <div className="space-y-2">
-                      {orderItems.slice(0, 3).map((item: any, idx: number) => (
-                        <div key={idx} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">{item.name} × {item.quantity}</span>
-                          <span className="text-foreground">{currencySymbol}{(item.price * item.quantity).toLocaleString('en-IN')}</span>
-                        </div>
-                      ))}
-                      {orderItems.length > 3 && (
-                        <p className="text-xs text-muted-foreground">+{orderItems.length - 3} more items</p>
-                      )}
-                    </div>
+            )}
 
-                    <div className="mt-3 flex justify-end">
-                      <Button variant="ghost" size="sm" asChild className="gap-1 text-primary">
-                        <Link to={`/track-order?orderId=${order.order_id}&email=${order.customer_email}`}>
-                          <Eye className="h-3.5 w-3.5" /> Track Order
+            {!addresses || addresses.length === 0 ? (
+              <Card><CardContent className="p-12 text-center">
+                <MapPin className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No saved addresses</h3>
+                <p className="text-muted-foreground">Add an address for faster checkout.</p>
+              </CardContent></Card>
+            ) : (
+              <div className="space-y-3">
+                {addresses.map(addr => (
+                  <Card key={addr.id}>
+                    <CardContent className="p-4 flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-foreground">{addr.label}</span>
+                          {addr.is_default && <Badge variant="secondary">Default</Badge>}
+                        </div>
+                        <p className="text-sm text-foreground">{addr.full_name}</p>
+                        <p className="text-sm text-muted-foreground">{addr.address_line}</p>
+                        <p className="text-sm text-muted-foreground">{addr.city}, {addr.state} {addr.zip}</p>
+                        {addr.phone && <p className="text-sm text-muted-foreground">{addr.phone}</p>}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => {
+                          setEditingAddress(addr);
+                          setAddrForm({ label: addr.label, full_name: addr.full_name, phone: addr.phone || '', address_line: addr.address_line, city: addr.city, state: addr.state, zip: addr.zip, is_default: addr.is_default });
+                          setShowAddressForm(true);
+                        }}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteAddressMutation.mutate(addr.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* WISHLIST TAB */}
+          <TabsContent value="wishlist">
+            {!wishlistProducts || wishlistProducts.length === 0 ? (
+              <Card><CardContent className="p-12 text-center">
+                <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">Your wishlist is empty</h3>
+                <p className="text-muted-foreground mb-4">Save products you love for later.</p>
+                <Button asChild><Link to="/products">Browse Products</Link></Button>
+              </CardContent></Card>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {wishlistProducts.map(product => (
+                  <Card key={product.id} className="overflow-hidden">
+                    <CardContent className="p-0">
+                      <div className="flex">
+                        <Link to={`/product/${product.slug || product.id}`} className="w-24 h-24 flex-shrink-0">
+                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                         </Link>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+                        <div className="p-3 flex-1 flex flex-col justify-between">
+                          <div>
+                            <Link to={`/product/${product.slug || product.id}`} className="font-medium text-foreground text-sm hover:underline line-clamp-1">{product.name}</Link>
+                            <p className="text-sm font-bold text-foreground mt-1">{currencySymbol}{Number(product.price).toLocaleString('en-IN')}</p>
+                          </div>
+                          <Button variant="ghost" size="sm" className="self-start text-destructive p-0 h-auto" onClick={() => removeFromWishlist(product.id)}>
+                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );
