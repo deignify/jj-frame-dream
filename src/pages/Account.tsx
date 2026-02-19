@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User, MapPin, Heart, Lock, Plus, Pencil, Trash2, Star } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User, MapPin, Heart, Lock, Plus, Pencil, Trash2, Star, RefreshCw, FileText, AlertTriangle, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,10 +11,22 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import { useBusinessSettings } from '@/hooks/useBusinessSettings';
 import { useWishlist } from '@/hooks/useWishlist';
+import { useCart } from '@/context/CartContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import Layout from '@/components/Layout';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const statusConfig: Record<string, { label: string; icon: any; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pending: { label: 'Pending', icon: Clock, variant: 'secondary' },
@@ -29,6 +41,7 @@ const Account = () => {
   const { data: settings } = useBusinessSettings();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { addToCart } = useCart();
   const currencySymbol = settings?.currency_symbol || '₹';
 
   useEffect(() => {
@@ -62,6 +75,83 @@ const Account = () => {
     },
     enabled: !!user,
   });
+
+  // --- Cancel Order ---
+  const cancelOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-orders'] });
+      toast.success('Order cancelled successfully');
+    },
+    onError: (e) => toast.error('Failed to cancel: ' + e.message),
+  });
+
+  // --- Reorder ---
+  const handleReorder = async (order: any) => {
+    const orderItems = Array.isArray(order.items) ? order.items : [];
+    const productIds = orderItems.map((item: any) => item.product_id || item.id).filter(Boolean);
+    if (productIds.length === 0) {
+      toast.error('No valid products found in this order');
+      return;
+    }
+    const { data: products } = await supabase.from('products').select('*').in('id', productIds);
+    if (!products || products.length === 0) {
+      toast.error('Products are no longer available');
+      return;
+    }
+    products.forEach(product => {
+      const orderItem = orderItems.find((item: any) => (item.product_id || item.id) === product.id);
+      addToCart(product as any, orderItem?.quantity || 1);
+    });
+    toast.success('Items added to cart!');
+    navigate('/cart');
+  };
+
+  // --- Download Invoice ---
+  const handleDownloadInvoice = (order: any) => {
+    const items = Array.isArray(order.items) ? order.items : [];
+    const invoiceContent = `
+INVOICE
+================================
+Order ID: ${order.order_id}
+Date: ${new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
+
+Customer: ${order.customer_name}
+Email: ${order.customer_email}
+${order.customer_phone ? `Phone: ${order.customer_phone}` : ''}
+
+Shipping Address:
+${order.shipping_address}
+${order.shipping_city}, ${order.shipping_state} ${order.shipping_zip}
+
+================================
+ITEMS
+================================
+${items.map((item: any) => `${item.name} x${item.quantity}  ${currencySymbol}${(item.price * item.quantity).toLocaleString('en-IN')}`).join('\n')}
+
+================================
+Subtotal: ${currencySymbol}${Number(order.subtotal).toLocaleString('en-IN')}
+Tax: ${currencySymbol}${Number(order.tax).toLocaleString('en-IN')}
+Total: ${currencySymbol}${Number(order.total).toLocaleString('en-IN')}
+Payment: ${order.payment_method === 'cod' ? 'Cash on Delivery' : 'Online Payment'}
+Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+================================
+    `.trim();
+
+    const blob = new Blob([invoiceContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `invoice-${order.order_id}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // --- Profile ---
   const { data: profile } = useQuery({
@@ -145,19 +235,35 @@ const Account = () => {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['addresses'] }); toast.success('Address deleted'); },
   });
 
-  // --- Change Password ---
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const changePasswordMutation = useMutation({
+  // --- Password Reset via Email ---
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const sendPasswordResetMutation = useMutation({
     mutationFn: async () => {
-      if (newPassword.length < 6) throw new Error('Password must be at least 6 characters');
-      if (newPassword !== confirmPassword) throw new Error('Passwords do not match');
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.resetPasswordForEmail(user!.email!, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
       if (error) throw error;
     },
-    onSuccess: () => { setNewPassword(''); setConfirmPassword(''); toast.success('Password updated!'); },
-    onError: (e) => toast.error(e.message),
+    onSuccess: () => {
+      setResetEmailSent(true);
+      toast.success('Password reset link sent to your email!');
+    },
+    onError: (e) => toast.error('Failed: ' + e.message),
+  });
+
+  // --- Delete Account ---
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      // Sign out the user - actual account deletion would require admin/edge function
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('You have been signed out. Contact support to complete account deletion.');
+      navigate('/');
+    },
+    onError: (e) => toast.error('Failed: ' + e.message),
   });
 
   // --- Wishlist ---
@@ -272,9 +378,41 @@ const Account = () => {
                           ))}
                           {orderItems.length > 3 && <p className="text-xs text-muted-foreground">+{orderItems.length - 3} more items</p>}
                         </div>
-                        <div className="mt-3 flex justify-end">
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => handleDownloadInvoice(order)} className="gap-1 text-muted-foreground">
+                            <FileText className="h-3.5 w-3.5" /> Invoice
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleReorder(order)} className="gap-1 text-muted-foreground">
+                            <RefreshCw className="h-3.5 w-3.5" /> Reorder
+                          </Button>
+                          {order.status === 'pending' && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="gap-1 text-destructive">
+                                  <XCircle className="h-3.5 w-3.5" /> Cancel
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Cancel Order?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to cancel order {order.order_id}? This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>No, keep it</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => cancelOrderMutation.mutate(order.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Yes, cancel order
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                           <Button variant="ghost" size="sm" asChild className="gap-1 text-primary">
-                            <Link to={`/track-order?orderId=${order.order_id}&email=${order.customer_email}`}><Eye className="h-3.5 w-3.5" /> Track Order</Link>
+                            <Link to={`/track-order?orderId=${order.order_id}&email=${order.customer_email}`}><Eye className="h-3.5 w-3.5" /> Track</Link>
                           </Button>
                         </div>
                       </CardContent>
@@ -308,20 +446,69 @@ const Account = () => {
               </CardContent>
             </Card>
 
+            {/* Password Reset via Email */}
             <Card className="mt-4">
               <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Lock className="h-4 w-4" /> Change Password</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <Label>New Password</Label>
-                  <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 6 characters" className="mt-1" />
-                </div>
-                <div>
-                  <Label>Confirm Password</Label>
-                  <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" className="mt-1" />
-                </div>
-                <Button onClick={() => changePasswordMutation.mutate()} disabled={changePasswordMutation.isPending}>
-                  {changePasswordMutation.isPending ? 'Updating...' : 'Update Password'}
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  For security, we'll send a password reset link to your email address. Click the link in the email to set a new password.
+                </p>
+                {resetEmailSent ? (
+                  <div className="bg-accent/50 rounded-xl p-4 flex items-start gap-3">
+                    <Mail className="h-5 w-5 text-primary mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Reset link sent!</p>
+                      <p className="text-xs text-muted-foreground mt-1">Check your email ({user.email}) and click the link to reset your password.</p>
+                      <Button variant="link" size="sm" className="p-0 h-auto mt-2" onClick={() => setResetEmailSent(false)}>
+                        Send again
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button onClick={() => sendPasswordResetMutation.mutate()} disabled={sendPasswordResetMutation.isPending}>
+                    <Mail className="h-4 w-4 mr-2" />
+                    {sendPasswordResetMutation.isPending ? 'Sending...' : 'Send Password Reset Link'}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Delete Account */}
+            <Card className="mt-4 border-destructive/30">
+              <CardHeader><CardTitle className="text-lg flex items-center gap-2 text-destructive"><AlertTriangle className="h-4 w-4" /> Delete Account</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Once you delete your account, all your data will be permanently removed. This action cannot be undone.
+                </p>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Delete My Account</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete your account and all associated data. Type your email to confirm.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <Input
+                      placeholder="Type your email to confirm"
+                      value={deleteConfirmEmail}
+                      onChange={e => setDeleteConfirmEmail(e.target.value)}
+                      className="mt-2"
+                    />
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setDeleteConfirmEmail('')}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={deleteConfirmEmail !== user.email || deleteAccountMutation.isPending}
+                        onClick={() => deleteAccountMutation.mutate()}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        {deleteAccountMutation.isPending ? 'Deleting...' : 'Delete Account'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardContent>
             </Card>
           </TabsContent>

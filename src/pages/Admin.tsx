@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users, MessageSquare } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users, MessageSquare, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import Layout from '@/components/Layout';
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct, Product } from '@/hooks/useProducts';
-import { useOrders, useUpdateOrderStatus } from '@/hooks/useOrders';
+import { useOrders, useUpdateOrderStatus, useDeleteOrder } from '@/hooks/useOrders';
+import { useAllReviews, useApproveReview, useDeleteReview } from '@/hooks/useReviews';
 import { useBusinessSettings, useUpdateBusinessSettings } from '@/hooks/useBusinessSettings';
 import { usePromoCodes, useCreatePromoCode, useUpdatePromoCode, useDeletePromoCode, PromoCode } from '@/hooks/usePromoCodes';
 import { useAuth } from '@/hooks/useAuth';
@@ -72,6 +73,10 @@ const Admin = () => {
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const updateOrderStatus = useUpdateOrderStatus();
+  const deleteOrder = useDeleteOrder();
+  const { data: allReviews, isLoading: reviewsLoading } = useAllReviews();
+  const approveReview = useApproveReview();
+  const deleteReview = useDeleteReview();
   const updateSettings = useUpdateBusinessSettings();
   const createPromoCode = useCreatePromoCode();
   const updatePromoCode = useUpdatePromoCode();
@@ -449,6 +454,12 @@ const Admin = () => {
           </Button>
         </div>
 
+        {/* Low Stock & Analytics Summary */}
+        <div className="mb-6 space-y-4">
+          <LowStockAlert products={products || []} />
+          <OrderAnalytics orders={orders || []} />
+        </div>
+
         <Tabs defaultValue="products" className="space-y-6">
           <TabsList className="bg-card rounded-full p-1 flex-wrap h-auto">
             <TabsTrigger value="products" className="rounded-full gap-2">
@@ -458,6 +469,18 @@ const Admin = () => {
             <TabsTrigger value="orders" className="rounded-full gap-2">
               <ShoppingCart className="h-4 w-4" />
               Orders
+            </TabsTrigger>
+            <TabsTrigger value="reviews" className="rounded-full gap-2">
+              <Star className="h-4 w-4" />
+              Reviews {allReviews && allReviews.filter(r => !r.is_approved).length > 0 && (
+                <span className="bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full ml-1">
+                  {allReviews.filter(r => !r.is_approved).length}
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="customers" className="rounded-full gap-2">
+              <Users className="h-4 w-4" />
+              Customers
             </TabsTrigger>
             <TabsTrigger value="promo-codes" className="rounded-full gap-2">
               <Tag className="h-4 w-4" />
@@ -657,7 +680,7 @@ const Admin = () => {
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">View</th>
+                          <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -696,9 +719,23 @@ const Admin = () => {
                               </Select>
                             </td>
                             <td className="py-4 px-4">
-                              <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openOrderDialog(order)}>
-                                <Eye className="h-4 w-4" />
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8" onClick={() => openOrderDialog(order)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className="rounded-full h-8 w-8 text-destructive hover:text-destructive" 
+                                  onClick={() => {
+                                    if (confirm('Delete this order? This cannot be undone.')) {
+                                      deleteOrder.mutate(order.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -740,6 +777,164 @@ const Admin = () => {
                   )}
                 </>
               )}
+            </div>
+          </TabsContent>
+
+          {/* Reviews Tab */}
+          <TabsContent value="reviews">
+            <div className="bg-card rounded-3xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-foreground">Product Reviews ({allReviews?.length || 0})</h2>
+              </div>
+
+              {reviewsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : !allReviews || allReviews.length === 0 ? (
+                <div className="text-center py-12">
+                  <Star className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No reviews yet</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {allReviews.map((review) => (
+                    <div key={review.id} className="bg-accent/30 rounded-2xl p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${review.is_approved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                            {review.is_approved ? 'Approved' : 'Pending'}
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: 5 }, (_, i) => (
+                              <Star key={i} className={`h-3.5 w-3.5 ${i < review.rating ? 'fill-primary text-primary' : 'text-muted-foreground/30'}`} />
+                            ))}
+                          </div>
+                          <span className="text-sm text-muted-foreground">
+                            {new Date(review.created_at).toLocaleDateString('en-IN')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={`rounded-full h-8 text-xs ${review.is_approved ? 'text-destructive' : 'text-green-700'}`}
+                            onClick={() => approveReview.mutate({ id: review.id, is_approved: !review.is_approved })}
+                          >
+                            {review.is_approved ? <><XCircle className="h-3.5 w-3.5 mr-1" /> Reject</> : <><CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve</>}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (confirm('Delete this review?')) deleteReview.mutate(review.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      {review.review_text && (
+                        <p className="text-sm text-foreground">{review.review_text}</p>
+                      )}
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <span className="font-medium text-foreground">{review.customer_name}</span>
+                        <span>{review.customer_email}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          {/* Customers Tab */}
+          <TabsContent value="customers">
+            <div className="bg-card rounded-3xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-foreground">Customers</h2>
+              </div>
+
+              {ordersLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : (() => {
+                // Build customer data from orders
+                const customerMap = new Map<string, { name: string; email: string; phone: string | null; orderCount: number; totalSpent: number; lastOrder: string }>();
+                orders?.forEach(order => {
+                  const existing = customerMap.get(order.customer_email);
+                  if (existing) {
+                    existing.orderCount++;
+                    existing.totalSpent += Number(order.total);
+                    if (new Date(order.created_at) > new Date(existing.lastOrder)) {
+                      existing.lastOrder = order.created_at;
+                    }
+                  } else {
+                    customerMap.set(order.customer_email, {
+                      name: order.customer_name,
+                      email: order.customer_email,
+                      phone: order.customer_phone,
+                      orderCount: 1,
+                      totalSpent: Number(order.total),
+                      lastOrder: order.created_at,
+                    });
+                  }
+                });
+                const customers = Array.from(customerMap.values()).sort((a, b) => b.totalSpent - a.totalSpent);
+
+                if (customers.length === 0) {
+                  return (
+                    <div className="text-center py-12">
+                      <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No customers yet</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Customer</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Phone</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Orders</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total Spent</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Last Order</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {customers.map((customer, idx) => (
+                          <tr key={idx} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+                            <td className="py-4 px-4">
+                              <p className="font-medium text-foreground">{customer.name}</p>
+                              <p className="text-sm text-muted-foreground">{customer.email}</p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="text-sm text-muted-foreground">{customer.phone || '-'}</p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="bg-accent text-accent-foreground text-xs font-medium px-2 py-1 rounded-full">
+                                {customer.orderCount}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="font-medium text-foreground">₹{customer.totalSpent.toLocaleString('en-IN')}</p>
+                            </td>
+                            <td className="py-4 px-4">
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(customer.lastOrder).toLocaleDateString('en-IN')}
+                              </p>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
             </div>
           </TabsContent>
 
