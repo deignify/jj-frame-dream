@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User, MapPin, Heart, Lock, Plus, Pencil, Trash2, Star, RefreshCw, FileText, AlertTriangle, Mail } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, XCircle, Eye, LogOut, User, MapPin, Heart, Lock, Plus, Pencil, Trash2, Star, RefreshCw, FileText, AlertTriangle, Mail, ShoppingCart, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -279,6 +279,21 @@ Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
     enabled: wishlistProductIds.length > 0,
   });
 
+  // --- My Reviews ---
+  const { data: myReviews } = useQuery({
+    queryKey: ['my-reviews', user?.email],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_reviews')
+        .select('*, products(name, image, slug)')
+        .eq('customer_email', user!.email!)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.email,
+  });
+
   const handleSignOut = async () => {
     const { error } = await signOut();
     if (error) toast.error('Failed to sign out');
@@ -328,11 +343,12 @@ Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
 
         {/* Tabs */}
         <Tabs defaultValue="orders" className="w-full">
-          <TabsList className="w-full grid grid-cols-4 mb-4">
+          <TabsList className="w-full grid grid-cols-5 mb-4">
             <TabsTrigger value="orders" className="gap-1 text-xs sm:text-sm"><Package className="h-3.5 w-3.5 hidden sm:block" /> Orders</TabsTrigger>
             <TabsTrigger value="profile" className="gap-1 text-xs sm:text-sm"><User className="h-3.5 w-3.5 hidden sm:block" /> Profile</TabsTrigger>
             <TabsTrigger value="addresses" className="gap-1 text-xs sm:text-sm"><MapPin className="h-3.5 w-3.5 hidden sm:block" /> Addresses</TabsTrigger>
             <TabsTrigger value="wishlist" className="gap-1 text-xs sm:text-sm"><Heart className="h-3.5 w-3.5 hidden sm:block" /> Wishlist</TabsTrigger>
+            <TabsTrigger value="reviews" className="gap-1 text-xs sm:text-sm"><MessageSquare className="h-3.5 w-3.5 hidden sm:block" /> Reviews</TabsTrigger>
           </TabsList>
 
           {/* ORDERS TAB */}
@@ -607,9 +623,59 @@ Status: ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                             <Link to={`/product/${product.slug || product.id}`} className="font-medium text-foreground text-sm hover:underline line-clamp-1">{product.name}</Link>
                             <p className="text-sm font-bold text-foreground mt-1">{currencySymbol}{Number(product.price).toLocaleString('en-IN')}</p>
                           </div>
-                          <Button variant="ghost" size="sm" className="self-start text-destructive p-0 h-auto" onClick={() => removeFromWishlist(product.id)}>
-                            <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
-                          </Button>
+                          <div className="flex gap-2 mt-1">
+                            <Button variant="ghost" size="sm" className="p-0 h-auto text-primary" onClick={() => { addToCart(product as any, 1); toast.success('Added to cart!'); }}>
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1" /> Add to Cart
+                            </Button>
+                            <Button variant="ghost" size="sm" className="p-0 h-auto text-destructive" onClick={() => removeFromWishlist(product.id)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* MY REVIEWS TAB */}
+          <TabsContent value="reviews">
+            {!myReviews || myReviews.length === 0 ? (
+              <Card><CardContent className="p-12 text-center">
+                <MessageSquare className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No reviews yet</h3>
+                <p className="text-muted-foreground mb-4">Your product reviews will appear here.</p>
+                <Button asChild><Link to="/products">Browse Products</Link></Button>
+              </CardContent></Card>
+            ) : (
+              <div className="space-y-4">
+                {myReviews.map((review: any) => (
+                  <Card key={review.id}>
+                    <CardContent className="p-4">
+                      <div className="flex gap-3">
+                        {review.products?.image && (
+                          <Link to={`/product/${review.products.slug || review.product_id}`} className="w-16 h-16 flex-shrink-0">
+                            <img src={review.products.image} alt={review.products.name} className="w-full h-full object-cover rounded-lg" />
+                          </Link>
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <Link to={`/product/${review.products?.slug || review.product_id}`} className="font-medium text-foreground text-sm hover:underline">
+                              {review.products?.name || 'Product'}
+                            </Link>
+                            <Badge variant={review.is_approved ? 'default' : 'secondary'}>
+                              {review.is_approved ? 'Approved' : 'Pending'}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1 mb-2">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className={`h-3.5 w-3.5 ${i < review.rating ? 'fill-primary text-primary' : 'text-muted-foreground'}`} />
+                            ))}
+                          </div>
+                          {review.review_text && <p className="text-sm text-muted-foreground">{review.review_text}</p>}
+                          <p className="text-xs text-muted-foreground mt-2">{new Date(review.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                         </div>
                       </div>
                     </CardContent>
