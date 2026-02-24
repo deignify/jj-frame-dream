@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users, MessageSquare, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, ShoppingCart, Eye, Settings, LogIn, LogOut, Loader2, Save, X, MapPin, Phone, Mail, Tag, CreditCard, FileSpreadsheet, Search, Filter, Star, Users, MessageSquare, AlertTriangle, CheckCircle, XCircle, Shield, ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +15,7 @@ import { useAllReviews, useApproveReview, useDeleteReview } from '@/hooks/useRev
 import { useBusinessSettings, useUpdateBusinessSettings } from '@/hooks/useBusinessSettings';
 import { usePromoCodes, useCreatePromoCode, useUpdatePromoCode, useDeletePromoCode, PromoCode } from '@/hooks/usePromoCodes';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { ImageUpload, MultiImageUpload } from '@/components/ImageUpload';
 import { BulkProductCSV } from '@/components/BulkProductCSV';
 import { toast } from 'sonner';
@@ -59,6 +60,71 @@ interface OrderItem {
   price: number;
   image?: string;
 }
+
+// Customer Row with role management
+const CustomerRow = ({ customer }: { customer: { name: string; email: string; phone: string | null; orderCount: number; totalSpent: number; lastOrder: string; userId: string | null } }) => {
+  const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!customer.userId) return;
+    supabase.from('user_roles').select('role').eq('user_id', customer.userId).eq('role', 'admin').maybeSingle()
+      .then(({ data }) => setRole(data ? 'admin' : 'user'));
+  }, [customer.userId]);
+
+  const toggleAdmin = async () => {
+    if (!customer.userId) { toast.error('This customer has no linked account'); return; }
+    setLoading(true);
+    try {
+      if (role === 'admin') {
+        await supabase.from('user_roles').delete().eq('user_id', customer.userId).eq('role', 'admin');
+        setRole('user');
+        toast.success(`Removed admin role from ${customer.name}`);
+      } else {
+        await supabase.from('user_roles').insert({ user_id: customer.userId, role: 'admin' });
+        setRole('admin');
+        toast.success(`Granted admin role to ${customer.name}`);
+      }
+    } catch (e: any) { toast.error('Failed: ' + e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <tr className="border-b border-border/50 hover:bg-accent/30 transition-colors">
+      <td className="py-4 px-4">
+        <p className="font-medium text-foreground">{customer.name}</p>
+        <p className="text-sm text-muted-foreground">{customer.email}</p>
+      </td>
+      <td className="py-4 px-4">
+        <p className="text-sm text-muted-foreground">{customer.phone || '-'}</p>
+      </td>
+      <td className="py-4 px-4">
+        <span className="bg-accent text-accent-foreground text-xs font-medium px-2 py-1 rounded-full">{customer.orderCount}</span>
+      </td>
+      <td className="py-4 px-4">
+        <p className="font-medium text-foreground">₹{customer.totalSpent.toLocaleString('en-IN')}</p>
+      </td>
+      <td className="py-4 px-4">
+        <p className="text-sm text-muted-foreground">{new Date(customer.lastOrder).toLocaleDateString('en-IN')}</p>
+      </td>
+      <td className="py-4 px-4">
+        {customer.userId ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`rounded-full h-8 text-xs gap-1 ${role === 'admin' ? 'text-primary' : 'text-muted-foreground'}`}
+            onClick={toggleAdmin}
+            disabled={loading}
+          >
+            {role === 'admin' ? <><Shield className="h-3.5 w-3.5" /> Admin</> : <><ShieldOff className="h-3.5 w-3.5" /> User</>}
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">Guest</span>
+        )}
+      </td>
+    </tr>
+  );
+};
 
 const Admin = () => {
   const { user, isAdmin, loading: authLoading, signIn, signOut } = useAuth();
@@ -853,7 +919,7 @@ const Admin = () => {
           <TabsContent value="customers">
             <div className="bg-card rounded-3xl p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-foreground">Customers</h2>
+                <h2 className="text-xl font-bold text-foreground">Customers & User Roles</h2>
               </div>
 
               {ordersLoading ? (
@@ -862,7 +928,7 @@ const Admin = () => {
                 </div>
               ) : (() => {
                 // Build customer data from orders
-                const customerMap = new Map<string, { name: string; email: string; phone: string | null; orderCount: number; totalSpent: number; lastOrder: string }>();
+                const customerMap = new Map<string, { name: string; email: string; phone: string | null; orderCount: number; totalSpent: number; lastOrder: string; userId: string | null }>();
                 orders?.forEach(order => {
                   const existing = customerMap.get(order.customer_email);
                   if (existing) {
@@ -871,6 +937,7 @@ const Admin = () => {
                     if (new Date(order.created_at) > new Date(existing.lastOrder)) {
                       existing.lastOrder = order.created_at;
                     }
+                    if (!existing.userId && order.user_id) existing.userId = order.user_id;
                   } else {
                     customerMap.set(order.customer_email, {
                       name: order.customer_name,
@@ -879,6 +946,7 @@ const Admin = () => {
                       orderCount: 1,
                       totalSpent: Number(order.total),
                       lastOrder: order.created_at,
+                      userId: order.user_id || null,
                     });
                   }
                 });
@@ -903,32 +971,12 @@ const Admin = () => {
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Orders</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total Spent</th>
                           <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Last Order</th>
+                          <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Role</th>
                         </tr>
                       </thead>
                       <tbody>
                         {customers.map((customer, idx) => (
-                          <tr key={idx} className="border-b border-border/50 hover:bg-accent/30 transition-colors">
-                            <td className="py-4 px-4">
-                              <p className="font-medium text-foreground">{customer.name}</p>
-                              <p className="text-sm text-muted-foreground">{customer.email}</p>
-                            </td>
-                            <td className="py-4 px-4">
-                              <p className="text-sm text-muted-foreground">{customer.phone || '-'}</p>
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="bg-accent text-accent-foreground text-xs font-medium px-2 py-1 rounded-full">
-                                {customer.orderCount}
-                              </span>
-                            </td>
-                            <td className="py-4 px-4">
-                              <p className="font-medium text-foreground">₹{customer.totalSpent.toLocaleString('en-IN')}</p>
-                            </td>
-                            <td className="py-4 px-4">
-                              <p className="text-sm text-muted-foreground">
-                                {new Date(customer.lastOrder).toLocaleDateString('en-IN')}
-                              </p>
-                            </td>
-                          </tr>
+                          <CustomerRow key={idx} customer={customer} />
                         ))}
                       </tbody>
                     </table>
