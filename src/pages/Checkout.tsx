@@ -87,6 +87,31 @@ const Checkout = () => {
     address: '', city: '', state: '', zip: '', country: 'India'
   });
 
+  // Auto-fill with user profile and default saved address
+  useEffect(() => {
+    if (!user) return;
+    const loadDefaults = async () => {
+      const [{ data: profile }, { data: addresses }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase.from('addresses').select('*').eq('user_id', user.id).eq('is_default', true).maybeSingle(),
+      ]);
+      setFormData(prev => ({
+        ...prev,
+        email: prev.email || user.email || '',
+        firstName: prev.firstName || (profile?.full_name?.split(' ')[0] || ''),
+        lastName: prev.lastName || (profile?.full_name?.split(' ').slice(1).join(' ') || ''),
+        phone: prev.phone || profile?.phone || '',
+        ...(addresses ? {
+          address: prev.address || addresses.address_line,
+          city: prev.city || addresses.city,
+          state: prev.state || addresses.state,
+          zip: prev.zip || addresses.zip,
+        } : {}),
+      }));
+    };
+    loadDefaults();
+  }, [user]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
